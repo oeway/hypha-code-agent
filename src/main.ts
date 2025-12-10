@@ -2,6 +2,7 @@
 import { settingsManager } from './settings';
 import { KernelManager } from './kernel';
 import { AgentManager } from './agent';
+import { HyphaService } from './hypha-service';
 
 console.log('Hypha Code Agent initializing...');
 
@@ -9,6 +10,8 @@ console.log('Hypha Code Agent initializing...');
 let kernelManager: KernelManager | null = null;
 // Agent manager instance
 let agentManager: AgentManager | null = null;
+// Hypha service instance
+let hyphaService: HyphaService | null = null;
 
 // Get DOM elements
 const statusDot = document.getElementById('statusDot') as HTMLElement;
@@ -117,10 +120,13 @@ function saveSettings() {
       maxSteps: parseInt(maxStepsInput.value) || 10
     });
 
-    // Update agent manager with new settings
+    // Update agent manager and hypha service with new settings
     if (agentManager) {
       const newSettings = settingsManager.getSettings();
       agentManager.updateSettings(newSettings);
+      if (hyphaService) {
+        hyphaService.updateSettings(newSettings);
+      }
       addOutput('✓ Settings saved and agent updated');
     } else {
       addOutput('✓ Settings saved successfully');
@@ -178,6 +184,14 @@ async function initializeKernel() {
       (message, type, append) => addOutput(message, type || 'info', append || false)
     );
     addOutput('✓ AI agent initialized');
+
+    // Initialize Hypha service
+    hyphaService = new HyphaService(
+      settings,
+      kernelManager,
+      agentManager,
+      (message, type) => addOutput(message, type || 'info')
+    );
 
     restartBtn.disabled = false;
     terminalInput.disabled = false;
@@ -288,6 +302,39 @@ addOutput(`✓ Settings loaded (Provider: ${settings.openaiProvider}, Model: ${s
 updateStatus('ready', 'Ready');
 
 console.log('✓ Hypha Code Agent UI initialized');
+
+// Connect to Hypha button handler
+connectBtn.addEventListener('click', async () => {
+  if (!hyphaService) {
+    addOutput('⚠ Hypha service not initialized', 'error');
+    return;
+  }
+
+  if (hyphaService.isConnected()) {
+    const info = hyphaService.getServiceInfo();
+    addOutput('Already connected to Hypha', 'info');
+    if (info.serviceId && info.serviceUrl) {
+      addOutput(`Service ID: ${info.serviceId}`, 'info');
+      addOutput(`Service URL: ${info.serviceUrl}`, 'info');
+    }
+    return;
+  }
+
+  connectBtn.disabled = true;
+  try {
+    const settings = settingsManager.getSettings();
+    await hyphaService.connect({
+      serverUrl: settings.hyphaServerUrl,
+      workspace: settings.hyphaWorkspace,
+      serviceId: 'hypha-code-agent',
+      visibility: 'protected'
+    });
+    connectBtn.textContent = 'Connected ✓';
+  } catch (error) {
+    addOutput(`Failed to connect to Hypha: ${(error as Error).message}`, 'error');
+    connectBtn.disabled = false;
+  }
+});
 
 // Auto-initialize kernel
 initializeKernel();

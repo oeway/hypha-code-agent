@@ -107,6 +107,28 @@ Click the ⚙️ Settings button to configure:
 - **Base URL**: API endpoint (e.g., `http://localhost:11434/v1/`)
 - **Model**: Model name (e.g., `qwen2.5-coder:7b`, `gpt-4`)
 - **API Key**: Your API key (stored locally)
+- **Hypha Server URL**: Hypha server endpoint (default: `https://hypha.aicell.io`)
+- **Hypha Workspace**: Your workspace name on Hypha (default: `default`)
+- **Max Reasoning Steps**: Maximum steps for React loop (1-50, default: 25)
+
+## Hypha Integration
+
+Connect your code agent to Hypha to make it accessible as a remote service:
+
+1. Click **"Connect to Hypha"** button
+2. If no token is provided, a login window will open
+3. Log in with your Hypha account
+4. The service will be registered automatically
+
+Once connected, your code agent becomes available as:
+- **Service URL**: `https://hypha.aicell.io/{workspace}/services/{service_id}`
+- **MCP URL**: `https://hypha.aicell.io/{workspace}/mcp/{service_id}/mcp`
+
+### Available Service Methods
+
+- `chatCompletion(messages, model, temperature, stream, max_steps)` - OpenAI-compatible chat endpoint with code execution
+- `executeCode(code)` - Direct Python code execution
+- `getServiceInfo()` - Get service information and status
 - **Hypha Server URL**: Hypha server endpoint
 - **Hypha Workspace**: Your workspace name
 
@@ -120,8 +142,8 @@ See [CLAUDE.md](./CLAUDE.md) for detailed implementation plan and architecture.
 
 - ✅ Phase 1: Project setup and settings UI
 - ✅ Phase 2: Web Python Kernel integration
-- ✅ Phase 3: OpenAI Agent integration
-- ⏳ Phase 4: Hypha service registration
+- ✅ Phase 3: OpenAI Agent integration with React Loop
+- ✅ Phase 4: Hypha service registration
 - ⏳ Phase 5: Terminal UI enhancements
 - ⏳ Phase 6: OpenAI API compatibility via ASGI
 - ⏳ Phase 7: Testing and integration
