@@ -21,7 +21,7 @@ const DEFAULT_SETTINGS: AgentSettings = {
   openaiModel: 'qwen2.5-coder:7b',
   openaiApiKey: 'ollama',
   hyphaServerUrl: 'https://hypha.aicell.io',
-  hyphaWorkspace: 'default',
+  hyphaWorkspace: '',
   maxSteps: 25
 };
 

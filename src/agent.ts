@@ -338,7 +338,7 @@ export class AgentManager {
   }
 
   // Shorten output for tool results to avoid context overflow
-  private shortenOutput(text: string, type: 'text' | 'html' | 'json'): string {
+  private shortenOutput(text: string, _type: 'text' | 'html' | 'json'): string {
     const MAX_LENGTH = 1000; // Max characters for tool result
     const MAX_LINES = 20; // Max lines for tool result
 

@@ -1,5 +1,6 @@
 // Web Python Kernel Manager
-import type { KernelManager as KM, KernelMode as KMMode, KernelLanguage as KLang } from 'web-python-kernel';
+// @ts-ignore - web-python-kernel doesn't have TypeScript declarations
+import type { KernelManager as KM } from 'web-python-kernel';
 
 export interface ExecutionEvent {
   type: 'stream' | 'execute_result' | 'display_data' | 'error' | 'execute_error';
@@ -67,6 +68,7 @@ export class KernelManager {
       this.onOutput('Loading web-python-kernel module...');
 
       // Dynamically import the kernel module
+      // @ts-ignore - web-python-kernel doesn't have TypeScript declarations
       const module = await import('web-python-kernel');
       this.KernelManagerClass = module.KernelManager;
       this.KernelMode = module.KernelMode;
@@ -103,7 +105,7 @@ export class KernelManager {
         autoSyncFs: false
       });
 
-      this.onOutput(`✓ Kernel created: ${this.kernelId.substring(0, 8)}...`);
+      this.onOutput(`✓ Kernel created: ${this.kernelId?.substring(0, 8)}...`);
 
       // Set up event listeners
       this.setupEventListeners();
@@ -247,7 +249,7 @@ export class KernelManager {
         autoSyncFs: false
       });
 
-      this.onOutput(`✓ New kernel created: ${this.kernelId.substring(0, 8)}...`);
+      this.onOutput(`✓ New kernel created: ${this.kernelId?.substring(0, 8)}...`);
 
       // Re-setup event listeners
       this.setupEventListeners();

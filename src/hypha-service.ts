@@ -258,7 +258,7 @@ export class HyphaService {
 
         // Chat completion endpoint (OpenAI-compatible)
         chatCompletion: Object.assign(
-          async ({ messages, model, temperature, stream = true, max_steps }: any, context?: any) => {
+          async ({ messages, model: _model, temperature: _temperature, stream: _stream = true, max_steps }: any, _context?: any) => {
             if (!this.agentManager) {
               throw new Error('Agent manager not initialized');
             }
@@ -282,7 +282,7 @@ export class HyphaService {
 
         // Direct code execution
         executeCode: Object.assign(
-          async ({ code }: { code: string }, context?: any) => {
+          async ({ code }: { code: string }, _context?: any) => {
             this.onOutput(`🌐 Remote call: executeCode() - Executing ${code.length} chars`, 'info');
 
             if (!this.kernelManager.isInitialized()) {
@@ -303,7 +303,7 @@ export class HyphaService {
 
         // Service info
         getServiceInfo: Object.assign(
-          async (context?: any) => {
+          async (_context?: any) => {
             this.onOutput(`🌐 Remote call: getServiceInfo()`, 'info');
 
             return {

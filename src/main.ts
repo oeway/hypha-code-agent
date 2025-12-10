@@ -3,6 +3,7 @@ import { settingsManager } from './settings';
 import { KernelManager } from './kernel';
 import { AgentManager } from './agent';
 import { HyphaService } from './hypha-service';
+import { TerminalRenderer, detectContentType } from './terminal-ui';
 
 console.log('Hypha Code Agent initializing...');
 
@@ -24,6 +25,9 @@ const clearBtn = document.getElementById('clearBtn') as HTMLButtonElement;
 const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
 const scriptModeBtn = document.getElementById('scriptModeBtn') as HTMLButtonElement;
 const queryModeBtn = document.getElementById('queryModeBtn') as HTMLButtonElement;
+
+// Initialize terminal renderer
+const terminalRenderer = new TerminalRenderer(terminalOutput);
 
 // Current mode: 'script' or 'query'
 let currentMode: 'script' | 'query' = 'query';
@@ -48,43 +52,31 @@ function updateStatus(status: 'ready' | 'busy' | 'error', text: string) {
   statusText.textContent = text;
 }
 
-// Track the last output line for streaming
-let lastOutputLine: HTMLElement | null = null;
-
-// Add terminal output
+// Add terminal output with enhanced rendering
 function addOutput(text: string, type: string = 'info', append: boolean = false) {
-  if (append && lastOutputLine) {
-    // Append to existing line for streaming
-    lastOutputLine.textContent += text;
-  } else {
-    // Create new line
-    const line = document.createElement('div');
-    line.className = 'terminal-line';
+  // Detect content type for better rendering
+  let renderType: 'info' | 'error' | 'stderr' | 'stdout' | 'result' | 'assistant' | 'execution' | 'code' | 'markdown' = type as any;
 
-    // Add styling based on type
-    if (type === 'error' || type === 'stderr') {
-      line.style.color = '#f48771';
-    } else if (type === 'result') {
-      line.style.color = '#4ec9b0';
-    } else if (type === 'stdout') {
-      line.style.color = '#d4d4d4';
-    } else if (type === 'assistant') {
-      line.style.color = '#9cdcfe'; // Light blue for assistant
-    } else if (type === 'execution') {
-      line.style.color = '#ce9178'; // Orange for code execution
+  // Auto-detect markdown for assistant messages
+  if (type === 'assistant' && !append) {
+    const contentType = detectContentType(text);
+    if (contentType === 'markdown') {
+      renderType = 'markdown';
+    } else if (contentType === 'code') {
+      renderType = 'code';
     }
-
-    line.textContent = text;
-    terminalOutput.appendChild(line);
-    lastOutputLine = line;
   }
 
-  terminalOutput.scrollTop = terminalOutput.scrollHeight;
+  terminalRenderer.renderLine({
+    content: text,
+    type: renderType,
+    timestamp: new Date()
+  }, append);
 }
 
 // Clear terminal
 clearBtn.addEventListener('click', () => {
-  terminalOutput.innerHTML = '';
+  terminalRenderer.clear();
   addOutput('Terminal cleared.');
 });
 
@@ -234,13 +226,36 @@ function setMode(mode: 'script' | 'query') {
 scriptModeBtn.addEventListener('click', () => setMode('script'));
 queryModeBtn.addEventListener('click', () => setMode('query'));
 
-// Handle terminal input
+// Handle terminal input with command history support
 terminalInput.addEventListener('keydown', async (e) => {
+  // Command history navigation
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    const command = terminalRenderer.navigateHistory('up');
+    if (command !== null) {
+      terminalInput.value = command;
+    }
+    return;
+  }
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    const command = terminalRenderer.navigateHistory('down');
+    if (command !== null) {
+      terminalInput.value = command;
+    }
+    return;
+  }
+
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     const input = terminalInput.value.trim();
 
     if (!input) return;
+
+    // Add to command history
+    terminalRenderer.addToHistory(input);
+    terminalRenderer.resetHistoryIndex();
 
     // Clear input
     terminalInput.value = '';

@@ -275,6 +275,161 @@
         .button-secondary:hover:not(:disabled) {
             background: #505053;
         }
+
+        /* Markdown and Code Styling */
+        .markdown-content {
+            line-height: 1.6;
+        }
+
+        .markdown-content h1, .markdown-content h2, .markdown-content h3 {
+            margin: 12px 0 8px 0;
+            color: #cccccc;
+        }
+
+        .markdown-content h1 { font-size: 1.5em; }
+        .markdown-content h2 { font-size: 1.3em; }
+        .markdown-content h3 { font-size: 1.1em; }
+
+        .markdown-content p {
+            margin: 8px 0;
+        }
+
+        .markdown-content ul, .markdown-content ol {
+            margin: 8px 0;
+            padding-left: 24px;
+        }
+
+        .markdown-content li {
+            margin: 4px 0;
+        }
+
+        .markdown-content code {
+            background: #2d2d30;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: inherit;
+            font-size: 0.9em;
+            color: #ce9178;
+        }
+
+        .markdown-content pre {
+            margin: 8px 0;
+        }
+
+        .markdown-content pre code {
+            display: block;
+            padding: 12px;
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            overflow-x: auto;
+            color: #d4d4d4;
+        }
+
+        .markdown-content blockquote {
+            margin: 8px 0;
+            padding-left: 12px;
+            border-left: 3px solid #0e639c;
+            color: #8b8b8b;
+        }
+
+        .code-block-wrapper {
+            position: relative;
+            margin: 8px 0;
+        }
+
+        .code-block-wrapper pre {
+            margin: 0;
+            padding: 12px;
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+
+        .code-block-wrapper code {
+            font-family: inherit;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            padding: 4px 8px;
+            background: #2d2d30;
+            color: #cccccc;
+            border: 1px solid #3e3e42;
+            border-radius: 3px;
+            font-size: 11px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s, background 0.2s;
+        }
+
+        .code-block-wrapper:hover .copy-btn {
+            opacity: 1;
+        }
+
+        .copy-btn:hover {
+            background: #3e3e42;
+        }
+
+        /* Highlight.js Syntax Theme (VS Code Dark+) */
+        .hljs {
+            color: #d4d4d4;
+            background: #1e1e1e;
+        }
+
+        .hljs-keyword, .hljs-operator {
+            color: #569cd6;
+        }
+
+        .hljs-string {
+            color: #ce9178;
+        }
+
+        .hljs-number {
+            color: #b5cea8;
+        }
+
+        .hljs-comment {
+            color: #6a9955;
+            font-style: italic;
+        }
+
+        .hljs-function .hljs-title {
+            color: #dcdcaa;
+        }
+
+        .hljs-class .hljs-title {
+            color: #4ec9b0;
+        }
+
+        .hljs-variable, .hljs-attr {
+            color: #9cdcfe;
+        }
+
+        .hljs-built_in {
+            color: #4ec9b0;
+        }
+
+        .hljs-literal, .hljs-symbol {
+            color: #569cd6;
+        }
+
+        .hljs-tag {
+            color: #569cd6;
+        }
+
+        .hljs-name {
+            color: #4ec9b0;
+        }
+
+        .hljs-attribute {
+            color: #9cdcfe;
+        }
     </style>
 </head>
 <body>

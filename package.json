@@ -19,7 +19,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "highlight.js": "^11.11.1",
     "hypha-rpc": "^0.20.85",
+    "marked": "^17.0.1",
     "openai": "^6.10.0",
     "web-python-kernel": "^0.1.8"
   },

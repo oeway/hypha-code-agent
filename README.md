@@ -5,10 +5,16 @@ LLM-controlled Python kernel code agent with Hypha integration.
 ## Features
 
 - 🐍 **Web Python Kernel**: Execute Python code directly in the browser using Pyodide
-- 🤖 **AI Agent Mode**: Ask AI to write and execute code for you (coming soon)
+- 🤖 **AI Agent Mode**: Ask AI to write and execute code with React Loop reasoning
 - ⚙️ **Configurable**: Support for OpenAI, Ollama, and custom LLM providers
 - 🔌 **Hypha Integration**: Register as a service on Hypha server
 - 💾 **Persistent Settings**: Configuration stored in localStorage
+- 🎨 **Enhanced Terminal UI**:
+  - Syntax highlighting for Python code blocks
+  - Markdown rendering for AI responses
+  - Copy-to-clipboard for code snippets
+  - Command history with arrow key navigation
+  - VS Code Dark+ color theme
 
 ## Setup
 
@@ -47,6 +53,26 @@ pnpm run build
 # Preview production build
 pnpm run preview
 ```
+
+## Deployment
+
+The application is automatically deployed to GitHub Pages when changes are pushed to the main branch.
+
+**Live URL**: [https://code-agent.aicell.io](https://code-agent.aicell.io)
+
+### GitHub Actions Workflow
+
+The project includes a GitHub Actions workflow (`.github/workflows/deploy.yml`) that:
+- Builds the application on every push to main
+- Automatically deploys to GitHub Pages
+- Handles CNAME configuration for custom domain
+
+### Manual Deployment
+
+To manually deploy:
+1. Ensure you have GitHub Pages enabled in repository settings
+2. Push changes to the main branch
+3. GitHub Actions will automatically build and deploy
 
 ## Usage
 
@@ -144,7 +170,7 @@ See [CLAUDE.md](./CLAUDE.md) for detailed implementation plan and architecture.
 - ✅ Phase 2: Web Python Kernel integration
 - ✅ Phase 3: OpenAI Agent integration with React Loop
 - ✅ Phase 4: Hypha service registration
-- ⏳ Phase 5: Terminal UI enhancements
+- ✅ Phase 5: Terminal UI enhancements
 - ⏳ Phase 6: OpenAI API compatibility via ASGI
 - ⏳ Phase 7: Testing and integration
 - ⏳ Phase 8: Deployment
