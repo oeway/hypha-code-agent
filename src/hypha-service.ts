@@ -74,32 +74,65 @@ export class HyphaService {
 
       const hyphaClient = (window as any).hyphaWebsocketClient;
 
-      // Handle authentication
+      // Handle authentication - check localStorage first
       let token = config.token;
 
+      // Try to get token from localStorage
+      if (!token) {
+        const savedToken = localStorage.getItem('hypha_token');
+        const tokenExpiry = localStorage.getItem('hypha_token_expiry');
+
+        if (savedToken && tokenExpiry && new Date(tokenExpiry) > new Date()) {
+          token = savedToken;
+          this.onOutput('Using saved authentication token', 'info');
+        }
+      }
+
+      // If still no token or token is expired, initiate login
       if (!token || this.isTokenExpired(token)) {
         if (token) {
           this.onOutput('Token expired, requesting new token...', 'info');
+          // Clear expired token
+          localStorage.removeItem('hypha_token');
+          localStorage.removeItem('hypha_token_expiry');
         } else {
           this.onOutput('No token provided, initiating login...', 'info');
         }
 
-        token = await hyphaClient.login({
+        // Login to get token
+        const loginConfig: any = {
           server_url: config.serverUrl,
           login_callback: (context: any) => {
             this.onOutput(`Please open login URL: ${context.login_url}`, 'info');
             window.open(context.login_url, '_blank');
-          },
-          workspace: config.workspace
-        });
+          }
+        };
+
+        token = await hyphaClient.login(loginConfig);
+
+        // Save token to localStorage with 3-hour expiry
+        if (token) {
+          localStorage.setItem('hypha_token', token);
+          const expiry = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
+          localStorage.setItem('hypha_token_expiry', expiry);
+          this.onOutput('✓ Login successful, token saved', 'info');
+        }
       }
 
       // Connect to Hypha server
+      // Normalize workspace: convert empty string to null
+      const workspace = config.workspace && config.workspace.trim() !== '' ? config.workspace : null;
+
       const connectionConfig: any = {
         server_url: config.serverUrl,
-        workspace: config.workspace,
-        token: token
+        token: token,
+        method_timeout: 180000
       };
+
+      // Only add workspace if it's not null
+      if (workspace) {
+        connectionConfig.workspace = workspace;
+      }
 
       this.server = await hyphaClient.connectToServer(connectionConfig);
 
