@@ -155,8 +155,6 @@ Once connected, your code agent becomes available as:
 - `chatCompletion(messages, model, temperature, stream, max_steps)` - OpenAI-compatible chat endpoint with code execution
 - `executeCode(code)` - Direct Python code execution
 - `getServiceInfo()` - Get service information and status
-- **Hypha Server URL**: Hypha server endpoint
-- **Hypha Workspace**: Your workspace name
 
 Settings are stored in browser localStorage and persist across sessions.
 
@@ -171,10 +169,9 @@ See [CLAUDE.md](./CLAUDE.md) for detailed implementation plan and architecture.
 - ✅ Phase 3: OpenAI Agent integration with React Loop
 - ✅ Phase 4: Hypha service registration
 - ✅ Phase 5: Terminal UI enhancements
-- ⏳ Phase 6: OpenAI API compatibility via ASGI
+- ✅ Phase 6: GitHub Pages deployment setup
 - ⏳ Phase 7: Testing and integration
-- ⏳ Phase 8: Deployment
+- ⏳ Phase 8: Documentation and polish
 
-## License
+**Note**: Phase 6 originally planned for ASGI service (Python backend) was replaced with direct GitHub Pages deployment since this is a browser-based application. The Hypha MCP service already provides remote access capabilities.
 
-MIT

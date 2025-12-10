@@ -235,19 +235,9 @@ export class HyphaService {
         }
       };
 
-      const getServiceInfoSchema = {
-        name: 'getServiceInfo',
-        description: 'Get information about the code agent service',
-        parameters: {
-          type: 'object',
-          properties: {},
-          required: []
-        }
-      };
-
       // Register service with MCP type
       const service = await this.server.registerService({
-        type: 'mcp',
+        type: 'agent',
         id: serviceId,
         name: 'Hypha Code Agent',
         description: 'AI-powered code agent with Python kernel execution capabilities. Provides OpenAI-compatible chat completion API with integrated code execution in a browser-based Python environment.',
@@ -299,31 +289,6 @@ export class HyphaService {
             }
           },
           { __schema__: executeCodeSchema }
-        ),
-
-        // Service info
-        getServiceInfo: Object.assign(
-          async (_context?: any) => {
-            this.onOutput(`🌐 Remote call: getServiceInfo()`, 'info');
-
-            return {
-              name: 'Hypha Code Agent',
-              version: '0.1.0',
-              features: {
-                chatCompletion: true,
-                codeExecution: true,
-                streaming: true,
-                reactLoop: true
-              },
-              settings: {
-                model: this.settings.openaiModel,
-                provider: this.settings.openaiProvider,
-                maxSteps: this.settings.maxSteps
-              },
-              kernelStatus: this.kernelManager.isInitialized() ? 'ready' : 'not_initialized'
-            };
-          },
-          { __schema__: getServiceInfoSchema }
         )
       });
 
