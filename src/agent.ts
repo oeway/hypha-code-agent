@@ -16,8 +16,10 @@ export interface AgentResponse {
 }
 
 // System prompt for the code agent
-const SYSTEM_PROMPT = `You are a powerful AI coding assistant with access to a Python kernel running in the browser.
+const DEFAULT_SYSTEM_PROMPT = `You are a powerful AI coding assistant with access to a Python kernel running in the browser.`
 
+
+const FORMAT_INSTRUCTIONS = `
 **FUNDAMENTAL REQUIREMENT: ALWAYS EXECUTE CODE USING TOOLS**
 - You must ALWAYS use the \`executeCode\` tool to run Python code - never just show code to the user
 - Only provide code snippets in your text responses if the user explicitly asks to see the code
@@ -26,7 +28,7 @@ const SYSTEM_PROMPT = `You are a powerful AI coding assistant with access to a P
 - Your primary mode of operation is executing code, not explaining theoretical concepts
 
 **Runtime Environment**
-You are running in a **Pyodide-based Jupyter notebook environment** in the user's browser:
+You are running in a **Pyodide-based Jupyter notebook kernel** in the user's browser:
 - **Platform**: Pyodide (Python in WebAssembly) running in browser
 - **Jupyter Notebook**: Full notebook environment with persistent state between executions
 - **Top-Level Await**: You can use \`await\` directly - **NO need for \`asyncio.run()\`**
@@ -37,6 +39,7 @@ You are running in a **Pyodide-based Jupyter notebook environment** in the user'
 - **Package Management**: Use \`import micropip; await micropip.install('package-name')\`
 - **Network**: HTTP requests available through standard requests library
 - **File System**: Limited file system access (browser environment)
+- **Initialization**: The kernel is initialized and ready, a startup script will be executed during initialization which provides necessary tool functions etc. in the subsequent code executions.
 
 **Multi-Step Reasoning Approach**
 For complex queries, use the multi-step React loop to:
@@ -72,8 +75,6 @@ Example workflow for complex tasks:
 - **Use print()**: Essential for making data visible across execution steps
 - **Show Progress**: For long operations, print intermediate status updates
 - **Summarize Results**: After execution, briefly explain what was accomplished
-
-The Python kernel is initialized and ready. Execute code immediately to help users accomplish their tasks.
 `;
 
 export class AgentManager {
@@ -113,6 +114,16 @@ export class AgentManager {
     this.initializeClient();
   }
 
+  /**
+   * Get the effective system prompt (custom from settings + base prompt)
+   */
+  private getSystemPrompt(): string {
+    if (this.settings.systemPrompt) {
+      return `${this.settings.systemPrompt}\n\n---\n\n${FORMAT_INSTRUCTIONS}`;
+    }
+    return DEFAULT_SYSTEM_PROMPT + "\n\n" + FORMAT_INSTRUCTIONS;
+  }
+
   clearHistory(): void {
     this.conversationHistory = [];
   }
@@ -133,13 +144,19 @@ export class AgentManager {
     });
 
     try {
+      // Prepare messages for chat completion
+      const messages = [
+        { role: 'system' as const, content: this.getSystemPrompt() },
+        ...this.conversationHistory
+      ];
+
+      // Debug: Log full chat messages
+      console.log('[Agent] Chat completion messages:', JSON.stringify(messages, null, 2));
+
       // Call OpenAI with streaming and function calling
       const response = await this.client.chat.completions.create({
         model: this.settings.openaiModel,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          ...this.conversationHistory
-        ],
+        messages: messages as any,
         tools: [
           {
             type: 'function',
@@ -392,13 +409,19 @@ export class AgentManager {
       while (loopCount < maxSteps) {
         loopCount++;
 
+        // Prepare messages for chat completion
+        const messages = [
+          { role: 'system' as const, content: this.getSystemPrompt() },
+          ...this.conversationHistory
+        ];
+
+        // Debug: Log full chat messages
+        console.log(`[Agent] React Loop Step ${loopCount}/${maxSteps} - Chat completion messages:`, JSON.stringify(messages, null, 2));
+
         // Call OpenAI with streaming and function calling
         const response = await this.client.chat.completions.create({
           model: this.settings.openaiModel,
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            ...this.conversationHistory
-          ],
+          messages: messages as any,
           tools: [
             {
               type: 'function',

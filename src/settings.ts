@@ -13,6 +13,10 @@ export interface AgentSettings {
 
   // Agent Behavior
   maxSteps: number; // Maximum reasoning steps for React loop
+
+  // Custom System Prompt
+  startupScript?: string; // Python script to generate system prompt from stdout
+  systemPrompt?: string; // Generated or manually set system prompt
 }
 
 const DEFAULT_SETTINGS: AgentSettings = {

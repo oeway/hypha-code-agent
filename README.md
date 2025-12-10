@@ -127,6 +127,8 @@ For simple queries that need only one execution, use the `/single` prefix:
 
 ## Settings
 
+### UI Settings
+
 Click the ⚙️ Settings button to configure:
 
 - **OpenAI Provider**: OpenAI, Ollama (local), or Custom
@@ -134,8 +136,93 @@ Click the ⚙️ Settings button to configure:
 - **Model**: Model name (e.g., `qwen2.5-coder:7b`, `gpt-4`)
 - **API Key**: Your API key (stored locally)
 - **Hypha Server URL**: Hypha server endpoint (default: `https://hypha.aicell.io`)
-- **Hypha Workspace**: Your workspace name on Hypha (default: `default`)
+- **Hypha Workspace**: Your workspace name on Hypha (default: ``)
 - **Max Reasoning Steps**: Maximum steps for React loop (1-50, default: 25)
+
+### URL Query Parameters
+
+You can configure the agent silently via URL parameters, perfect for embedding or sharing pre-configured instances:
+
+#### Connection Parameters
+- `server_url` - Hypha server URL (default: `https://hypha.aicell.io`)
+- `workspace` - Hypha workspace name
+- `token` - Authentication token (auto-connects if provided)
+- `service_id` - Custom service ID (default: `hypha-code-agent`)
+- `visibility` - Service visibility: `public` or `protected` (default: `protected`)
+
+#### Model Configuration
+- `model` - Model name (e.g., `gpt-4o-mini`, `qwen2.5-coder:7b`)
+- `base_url` - API base URL (e.g., `http://localhost:11434/v1/`)
+- `api_key` - API key for authentication
+- `openai_provider` - Provider type: `openai`, `ollama`, or `custom`
+- `temperature` - Sampling temperature (0-2)
+- `max_steps` - Maximum React loop steps (1-50)
+
+#### Agent Artifact
+- `agent_artifact` - Load agent configuration from Hypha artifact (e.g., `hypha-agents/productive-martin-touch-upliftingly`)
+
+**Example URLs**:
+```bash
+# Basic configuration
+https://code-agent.aicell.io/?model=gpt-4o-mini&max_steps=15
+
+# Auto-connect to Hypha
+https://code-agent.aicell.io/?workspace=my-workspace&token=<your-token>
+
+# Load agent from artifact
+https://code-agent.aicell.io/?agent_artifact=hypha-agents/my-agent
+
+# Complete configuration
+https://code-agent.aicell.io/?agent_artifact=hypha-agents/my-agent&workspace=my-workspace&token=<token>&max_steps=20
+```
+
+### Configuration Priority
+
+Settings are applied in the following priority order (highest to lowest):
+1. **Agent Artifact** - Configuration from published agent artifact
+2. **URL Parameters** - Query parameters in the URL
+3. **UI Settings** - Settings saved via the settings dialog
+4. **Defaults** - Built-in default values
+
+This allows you to:
+- Use the UI settings as your personal defaults
+- Override specific settings via URL parameters
+- Load complete agent configurations from artifacts
+
+## Agent Artifacts
+
+Agent artifacts are published agent configurations stored on Hypha that can be loaded via URL. They contain:
+
+- **Model Configuration**: Base URL, model name, temperature settings
+- **Startup Script**: Python code that runs on initialization (stdout becomes system prompt)
+- **Welcome Message**: Greeting shown to users
+- **System Prompt**: Generated from startup script execution
+- **Metadata**: Name, description, version, license
+
+### Creating Agent Artifacts
+
+Agent artifacts are created using the [Hypha Agents](https://github.com/amun-ai/hypha-agents) platform:
+
+1. Create your agent in Hypha Agents
+2. Configure model settings and write startup script
+3. Publish the agent to create an artifact
+4. Use the artifact ID in URL: `?agent_artifact=workspace/artifact-id`
+
+### Startup Script → System Prompt
+
+The startup script pattern allows dynamic system prompt generation:
+
+```python
+# startup_script in agent artifact
+print("You are a helpful Python coding assistant.")
+print("You have access to numpy, matplotlib, and pandas.")
+print("Always explain your code and show visualizations when possible.")
+```
+
+The stdout from this script becomes the system prompt for the agent. This allows:
+- **Dynamic prompts** based on Python logic
+- **Environment inspection** (check available packages, system info)
+- **Conditional behavior** based on runtime conditions
 
 ## Hypha Integration
 

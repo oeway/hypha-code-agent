@@ -75,7 +75,6 @@ export class KernelManager {
       this.KernelLanguage = module.KernelLanguage;
       this.KernelEvents = module.KernelEvents;
 
-      this.onOutput('✓ Kernel module loaded');
       this.onStatusChange('initializing', 'Creating kernel manager...');
 
       // Create kernel manager
@@ -95,7 +94,6 @@ export class KernelManager {
         workerUrl: '/kernel.worker.js'  // Specify worker URL relative to public folder (note: lowercase 'u')
       });
 
-      this.onOutput('✓ Kernel manager created');
       this.onStatusChange('initializing', 'Initializing Python kernel...');
 
       // Create kernel instance

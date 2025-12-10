@@ -4,8 +4,16 @@ import { KernelManager } from './kernel';
 import { AgentManager } from './agent';
 import { HyphaService } from './hypha-service';
 import { TerminalRenderer, detectContentType } from './terminal-ui';
+import { parseUrlParams, fetchAgentArtifact, generateSystemPromptFromScript, type AgentArtifact } from './url-params';
 
 console.log('Hypha Code Agent initializing...');
+
+// Parse URL parameters at startup
+const urlParams = parseUrlParams();
+console.log('[URL Params] Parsed URL parameters:', urlParams);
+
+// Store agent artifact for later use
+let agentArtifact: AgentArtifact | null = null;
 
 // Kernel manager instance
 let kernelManager: KernelManager | null = null;
@@ -310,6 +318,120 @@ terminalInput.addEventListener('keydown', async (e) => {
   }
 });
 
+// Apply URL parameters and load agent artifact
+async function applyUrlConfiguration() {
+  // Load agent artifact if specified
+  if (urlParams.agent_artifact) {
+    addOutput(`🔍 Loading agent artifact: ${urlParams.agent_artifact}`);
+    try {
+      const serverUrl = urlParams.server_url || settingsManager.getSettings().hyphaServerUrl;
+      agentArtifact = await fetchAgentArtifact(urlParams.agent_artifact, serverUrl);
+
+      if (agentArtifact) {
+        addOutput(`✓ Loaded agent artifact: ${agentArtifact.manifest.name} v${agentArtifact.manifest.version}`);
+      } else {
+        addOutput(`⚠ Failed to load agent artifact: ${urlParams.agent_artifact}`, 'error');
+      }
+    } catch (error) {
+      addOutput(`⚠ Error loading agent artifact: ${(error as Error).message}`, 'error');
+    }
+  }
+
+  // Apply URL parameters to settings
+  const currentSettings = settingsManager.getSettings();
+  const updatedSettings = { ...currentSettings };
+  let hasChanges = false;
+
+  // Priority: URL params > existing settings (agent artifact only affects startup script and system prompt)
+
+  // Model configuration from URL params only
+  if (urlParams.base_url) {
+    updatedSettings.openaiBaseUrl = urlParams.base_url;
+    hasChanges = true;
+  }
+  if (urlParams.model) {
+    updatedSettings.openaiModel = urlParams.model;
+    hasChanges = true;
+  }
+  if (urlParams.api_key) {
+    updatedSettings.openaiApiKey = urlParams.api_key;
+    hasChanges = true;
+  }
+  if (urlParams.openai_provider) {
+    updatedSettings.openaiProvider = urlParams.openai_provider as 'openai' | 'ollama' | 'custom';
+    hasChanges = true;
+  }
+
+  // Hypha connection settings from URL params
+  if (urlParams.server_url) {
+    updatedSettings.hyphaServerUrl = urlParams.server_url;
+    hasChanges = true;
+  }
+  if (urlParams.workspace) {
+    updatedSettings.hyphaWorkspace = urlParams.workspace;
+    hasChanges = true;
+  }
+
+  // Max steps
+  if (urlParams.max_steps) {
+    updatedSettings.maxSteps = parseInt(urlParams.max_steps) || 10;
+    hasChanges = true;
+  }
+
+  // Save updated settings
+  if (hasChanges) {
+    settingsManager.saveSettings(updatedSettings);
+    addOutput('✓ Settings updated from URL parameters and/or agent artifact');
+
+    // Update agent manager with new settings
+    if (agentManager) {
+      agentManager.updateSettings(settingsManager.getSettings());
+    }
+    if (hyphaService) {
+      hyphaService.updateSettings(settingsManager.getSettings());
+    }
+  }
+
+  // Run startup script from agent artifact if present
+  if (agentArtifact?.manifest.startup_script && kernelManager) {
+    addOutput('🐍 Running agent startup script...');
+    try {
+      const systemPrompt = await generateSystemPromptFromScript(
+        agentArtifact.manifest.startup_script,
+        (code) => kernelManager!.executeCode(code)
+      );
+
+      if (systemPrompt) {
+        addOutput(`✓ System prompt generated (${systemPrompt.length} chars)`);
+        // Save startup script and system prompt to settings
+        settingsManager.saveSettings({
+          startupScript: agentArtifact.manifest.startup_script,
+          systemPrompt: systemPrompt
+        });
+        addOutput('✓ System prompt saved to settings');
+
+        // Update agent manager with new system prompt
+        if (agentManager) {
+          agentManager.updateSettings(settingsManager.getSettings());
+          addOutput('✓ Agent manager updated with system prompt');
+        }
+        if (hyphaService) {
+          hyphaService.updateSettings(settingsManager.getSettings());
+        }
+      }
+    } catch (error) {
+      addOutput(`⚠ Failed to run startup script: ${(error as Error).message}`, 'error');
+    }
+  }
+
+  // Show welcome message from agent artifact if present
+  if (agentArtifact?.manifest.welcomeMessage) {
+    addOutput('');
+    addOutput(agentArtifact.manifest.welcomeMessage, 'assistant');
+    addOutput('');
+  }
+}
+
 // Initialize
 addOutput('✓ UI loaded successfully');
 const settings = settingsManager.getSettings();
@@ -341,8 +463,9 @@ connectBtn.addEventListener('click', async () => {
     await hyphaService.connect({
       serverUrl: settings.hyphaServerUrl,
       workspace: settings.hyphaWorkspace,
-      serviceId: 'hypha-code-agent',
-      visibility: 'protected'
+      serviceId: urlParams.service_id || 'hypha-code-agent',
+      visibility: urlParams.visibility || 'protected',
+      token: urlParams.token
     });
     connectBtn.textContent = 'Connected ✓';
   } catch (error) {
@@ -351,5 +474,18 @@ connectBtn.addEventListener('click', async () => {
   }
 });
 
-// Auto-initialize kernel
-initializeKernel();
+// Auto-initialize kernel and apply configuration
+(async () => {
+  await initializeKernel();
+
+  // Apply URL configuration after kernel is ready
+  if (Object.keys(urlParams).length > 0 || urlParams.agent_artifact) {
+    await applyUrlConfiguration();
+  }
+
+  // Auto-connect to Hypha if token is provided in URL
+  if (urlParams.token && hyphaService) {
+    addOutput('🔗 Auto-connecting to Hypha with URL token...');
+    connectBtn.click();
+  }
+})();
