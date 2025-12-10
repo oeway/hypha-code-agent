@@ -1,0 +1,31 @@
+{
+  "name": "hypha-code-agent",
+  "version": "1.0.0",
+  "description": "LLM-controlled Python kernel code agent with Hypha integration",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "llm",
+    "agent",
+    "python",
+    "kernel",
+    "hypha",
+    "code-execution"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "hypha-rpc": "^0.20.85",
+    "openai": "^6.10.0",
+    "web-python-kernel": "^0.1.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.2",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7"
+  }
+}

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hypha Code Agent</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: #2d2d30;
+            padding: 12px 20px;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 500;
+            color: #cccccc;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 12px;
+            background: #1e1e1e;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #6b7280;
+        }
+
+        .status-dot.ready { background: #10b981; }
+        .status-dot.busy { background: #f59e0b; animation: pulse 1.5s infinite; }
+        .status-dot.error { background: #ef4444; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        button {
+            padding: 6px 16px;
+            background: #0e639c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover:not(:disabled) {
+            background: #1177bb;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .terminal-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .terminal-output {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .terminal-line {
+            margin: 4px 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .terminal-input-area {
+            padding: 10px;
+            border-top: 1px solid #3e3e42;
+            background: #252526;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .mode-switch {
+            display: flex;
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .mode-switch button {
+            padding: 6px 12px;
+            background: transparent;
+            border: none;
+            color: #8b8b8b;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .mode-switch button.active {
+            background: #0e639c;
+            color: white;
+        }
+
+        .mode-switch button:hover:not(.active) {
+            background: #2d2d30;
+            color: #d4d4d4;
+        }
+
+        .terminal-input {
+            flex: 1;
+            padding: 8px;
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            color: #d4d4d4;
+            font-family: inherit;
+            font-size: 14px;
+        }
+
+        .terminal-input:focus {
+            outline: none;
+            border-color: #0e639c;
+        }
+
+        /* Settings Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.show {
+            display: flex;
+        }
+
+        .modal {
+            background: #2d2d30;
+            border: 1px solid #3e3e42;
+            border-radius: 8px;
+            width: 500px;
+            max-width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            font-size: 16px;
+            font-weight: 500;
+            color: #cccccc;
+        }
+
+        .modal-close {
+            background: transparent;
+            color: #cccccc;
+            font-size: 20px;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+        }
+
+        .modal-close:hover {
+            background: #3e3e42;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: #cccccc;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 8px 12px;
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            color: #d4d4d4;
+            font-family: inherit;
+            font-size: 13px;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #0e639c;
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 4px;
+            font-size: 11px;
+            color: #8b8b8b;
+        }
+
+        .modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #3e3e42;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .button-secondary {
+            background: #3e3e42;
+        }
+
+        .button-secondary:hover:not(:disabled) {
+            background: #505053;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 Hypha Code Agent</h1>
+        <div class="header-controls">
+            <div class="status">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Initializing...</span>
+            </div>
+            <button id="settingsBtn" title="Settings">⚙️ Settings</button>
+            <button id="connectBtn">Connect to Hypha</button>
+            <button id="restartBtn" disabled>Restart Kernel</button>
+            <button id="clearBtn">Clear</button>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="modal-close" id="closeSettingsBtn">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="openaiProvider">OpenAI Provider</label>
+                    <select id="openaiProvider">
+                        <option value="openai">OpenAI</option>
+                        <option value="ollama">Ollama (Local)</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                    <small>Select your LLM provider</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="openaiBaseUrl">Base URL</label>
+                    <input
+                        type="text"
+                        id="openaiBaseUrl"
+                        placeholder="http://localhost:11434/v1/"
+                    />
+                    <small>API endpoint base URL</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="openaiModel">Model</label>
+                    <input
+                        type="text"
+                        id="openaiModel"
+                        placeholder="qwen2.5-coder:7b"
+                    />
+                    <small>Model name to use for code generation</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="openaiApiKey">API Key</label>
+                    <input
+                        type="password"
+                        id="openaiApiKey"
+                        placeholder="sk-..."
+                    />
+                    <small>Your OpenAI API key (stored locally)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="hyphaServerUrl">Hypha Server URL</label>
+                    <input
+                        type="text"
+                        id="hyphaServerUrl"
+                        placeholder="https://hypha.aicell.io"
+                    />
+                    <small>Hypha server endpoint</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="hyphaWorkspace">Hypha Workspace</label>
+                    <input
+                        type="text"
+                        id="hyphaWorkspace"
+                        placeholder="my-workspace"
+                    />
+                    <small>Your workspace name on Hypha</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="button-secondary" id="cancelSettingsBtn">Cancel</button>
+                <button id="saveSettingsBtn">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="terminal-area">
+        <div class="terminal-output" id="terminalOutput">
+            <div class="terminal-line">Welcome to Hypha Code Agent!</div>
+            <div class="terminal-line">Initializing web Python kernel...</div>
+        </div>
+        <div class="terminal-input-area">
+            <div class="input-wrapper">
+                <div class="mode-switch">
+                    <button id="scriptModeBtn" class="active" title="Execute Python code directly">Script</button>
+                    <button id="queryModeBtn" title="Ask AI agent to write and execute code">Query</button>
+                </div>
+                <input
+                    type="text"
+                    class="terminal-input"
+                    id="terminalInput"
+                    placeholder="Type Python code here (Press Enter to execute)..."
+                    disabled
+                />
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
