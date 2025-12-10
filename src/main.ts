@@ -1,11 +1,14 @@
 // Hypha Code Agent - Main Entry Point
 import { settingsManager } from './settings';
 import { KernelManager } from './kernel';
+import { AgentManager } from './agent';
 
 console.log('Hypha Code Agent initializing...');
 
 // Kernel manager instance
 let kernelManager: KernelManager | null = null;
+// Agent manager instance
+let agentManager: AgentManager | null = null;
 
 // Get DOM elements
 const statusDot = document.getElementById('statusDot') as HTMLElement;
@@ -41,22 +44,37 @@ function updateStatus(status: 'ready' | 'busy' | 'error', text: string) {
   statusText.textContent = text;
 }
 
-// Add terminal output
-function addOutput(text: string, type: string = 'info') {
-  const line = document.createElement('div');
-  line.className = 'terminal-line';
+// Track the last output line for streaming
+let lastOutputLine: HTMLElement | null = null;
 
-  // Add styling based on type
-  if (type === 'error' || type === 'stderr') {
-    line.style.color = '#f48771';
-  } else if (type === 'result') {
-    line.style.color = '#4ec9b0';
-  } else if (type === 'stdout') {
-    line.style.color = '#d4d4d4';
+// Add terminal output
+function addOutput(text: string, type: string = 'info', append: boolean = false) {
+  if (append && lastOutputLine) {
+    // Append to existing line for streaming
+    lastOutputLine.textContent += text;
+  } else {
+    // Create new line
+    const line = document.createElement('div');
+    line.className = 'terminal-line';
+
+    // Add styling based on type
+    if (type === 'error' || type === 'stderr') {
+      line.style.color = '#f48771';
+    } else if (type === 'result') {
+      line.style.color = '#4ec9b0';
+    } else if (type === 'stdout') {
+      line.style.color = '#d4d4d4';
+    } else if (type === 'assistant') {
+      line.style.color = '#9cdcfe'; // Light blue for assistant
+    } else if (type === 'execution') {
+      line.style.color = '#ce9178'; // Orange for code execution
+    }
+
+    line.textContent = text;
+    terminalOutput.appendChild(line);
+    lastOutputLine = line;
   }
 
-  line.textContent = text;
-  terminalOutput.appendChild(line);
   terminalOutput.scrollTop = terminalOutput.scrollHeight;
 }
 
@@ -96,7 +114,15 @@ function saveSettings() {
       hyphaWorkspace: hyphaWorkspaceInput.value
     });
 
-    addOutput('✓ Settings saved successfully');
+    // Update agent manager with new settings
+    if (agentManager) {
+      const newSettings = settingsManager.getSettings();
+      agentManager.updateSettings(newSettings);
+      addOutput('✓ Settings saved and agent updated');
+    } else {
+      addOutput('✓ Settings saved successfully');
+    }
+
     hideSettingsDialog();
   } catch (error) {
     addOutput('✗ Failed to save settings: ' + (error as Error).message);
@@ -140,6 +166,16 @@ async function initializeKernel() {
     );
 
     await kernelManager.initialize();
+
+    // Initialize agent manager after kernel is ready
+    const settings = settingsManager.getSettings();
+    agentManager = new AgentManager(
+      settings,
+      kernelManager,
+      (message, type, append) => addOutput(message, type || 'info', append || false)
+    );
+    addOutput('✓ AI agent initialized');
+
     restartBtn.disabled = false;
     terminalInput.disabled = false;
   } catch (error) {
@@ -209,10 +245,28 @@ terminalInput.addEventListener('keydown', async (e) => {
         addOutput(`Execution error: ${(error as Error).message}`, 'error');
       }
     } else {
-      // Query mode: Send to AI agent (not yet implemented)
-      addOutput(`Query: ${input}`, 'info');
-      addOutput('⚠ Query mode not yet implemented. Please use Script mode to test the kernel.', 'error');
-      // TODO: Implement AI agent query handling
+      // Query mode: Send to AI agent
+      if (!agentManager) {
+        addOutput('⚠ AI agent not initialized', 'error');
+        return;
+      }
+
+      if (!kernelManager || !kernelManager.isInitialized()) {
+        addOutput('Kernel not initialized', 'error');
+        return;
+      }
+
+      // Show user query with spacing
+      addOutput(''); // Blank line before
+      addOutput(`🤔 User: ${input}`, 'info');
+      addOutput(`🤖 Assistant: `, 'assistant');
+
+      // Process query with agent
+      try {
+        await agentManager.processQuery(input);
+      } catch (error) {
+        addOutput(`\nAgent error: ${(error as Error).message}`, 'error');
+      }
     }
   }
 });

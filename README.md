@@ -65,11 +65,22 @@ import sys; print(sys.version)
 for i in range(5): print(i)
 ```
 
-### Query Mode (AI Agent) - Coming Soon
+### Query Mode (AI Agent)
 
 1. Select "Query" mode
-2. Ask the AI to write and execute code
-3. The agent will generate Python code and run it for you
+2. Ask the AI to write and execute code in natural language
+3. The agent will:
+   - Understand your request
+   - Generate appropriate Python code
+   - Execute it in the kernel
+   - Explain the results
+
+Example queries:
+```
+Calculate the factorial of 10
+Create a plot showing y = x^2 from -5 to 5
+Generate 100 random numbers and show their mean and standard deviation
+```
 
 ## Settings
 
@@ -92,7 +103,7 @@ See [CLAUDE.md](./CLAUDE.md) for detailed implementation plan and architecture.
 
 - ✅ Phase 1: Project setup and settings UI
 - ✅ Phase 2: Web Python Kernel integration
-- 🚧 Phase 3: OpenAI Agent integration (in progress)
+- ✅ Phase 3: OpenAI Agent integration
 - ⏳ Phase 4: Hypha service registration
 - ⏳ Phase 5: Terminal UI enhancements
 - ⏳ Phase 6: OpenAI API compatibility via ASGI
