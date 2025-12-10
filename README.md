@@ -65,21 +65,38 @@ import sys; print(sys.version)
 for i in range(5): print(i)
 ```
 
-### Query Mode (AI Agent)
+### Query Mode (AI Agent with React Loop)
 
 1. Select "Query" mode
 2. Ask the AI to write and execute code in natural language
-3. The agent will:
-   - Understand your request
-   - Generate appropriate Python code
-   - Execute it in the kernel
-   - Explain the results
+3. The agent uses **React Loop** by default for:
+   - Multi-step reasoning and code execution
+   - Automatic error recovery and debugging
+   - Complex task breakdown
+   - Extended reasoning across multiple steps
 
 Example queries:
 ```
 Calculate the factorial of 10
 Create a plot showing y = x^2 from -5 to 5
 Generate 100 random numbers and show their mean and standard deviation
+Analyze the iris dataset: load it, calculate statistics, and create visualizations
+Debug any errors in my previous code and fix them
+```
+
+#### React Loop Features
+
+- **Multi-step reasoning**: AI can execute multiple code blocks in sequence
+- **Error recovery**: If code fails, AI analyzes the error and tries alternative approaches
+- **Extended context**: Maintains conversation history across reasoning steps
+- **Progress tracking**: Shows current step (e.g., "🔄 React Loop Step 3/10")
+- **Maximum 10 steps**: Prevents infinite loops while allowing complex workflows
+
+#### Single-Step Mode (Optional)
+
+For simple queries that need only one execution, use the `/single` prefix:
+```
+/single print("Hello, World!")
 ```
 
 ## Settings

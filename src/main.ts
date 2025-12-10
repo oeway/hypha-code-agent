@@ -23,7 +23,7 @@ const scriptModeBtn = document.getElementById('scriptModeBtn') as HTMLButtonElem
 const queryModeBtn = document.getElementById('queryModeBtn') as HTMLButtonElement;
 
 // Current mode: 'script' or 'query'
-let currentMode: 'script' | 'query' = 'script';
+let currentMode: 'script' | 'query' = 'query';
 
 // Settings modal elements
 const settingsModal = document.getElementById('settingsModal') as HTMLElement;
@@ -36,6 +36,7 @@ const openaiModelInput = document.getElementById('openaiModel') as HTMLInputElem
 const openaiApiKeyInput = document.getElementById('openaiApiKey') as HTMLInputElement;
 const hyphaServerUrlInput = document.getElementById('hyphaServerUrl') as HTMLInputElement;
 const hyphaWorkspaceInput = document.getElementById('hyphaWorkspace') as HTMLInputElement;
+const maxStepsInput = document.getElementById('maxSteps') as HTMLInputElement;
 
 // Update status
 function updateStatus(status: 'ready' | 'busy' | 'error', text: string) {
@@ -95,6 +96,7 @@ function showSettingsDialog() {
   openaiApiKeyInput.value = settings.openaiApiKey;
   hyphaServerUrlInput.value = settings.hyphaServerUrl;
   hyphaWorkspaceInput.value = settings.hyphaWorkspace;
+  maxStepsInput.value = settings.maxSteps.toString();
 
   settingsModal.classList.add('show');
 }
@@ -111,7 +113,8 @@ function saveSettings() {
       openaiModel: openaiModelInput.value,
       openaiApiKey: openaiApiKeyInput.value,
       hyphaServerUrl: hyphaServerUrlInput.value,
-      hyphaWorkspace: hyphaWorkspaceInput.value
+      hyphaWorkspace: hyphaWorkspaceInput.value,
+      maxSteps: parseInt(maxStepsInput.value) || 10
     });
 
     // Update agent manager with new settings
@@ -258,12 +261,19 @@ terminalInput.addEventListener('keydown', async (e) => {
 
       // Show user query with spacing
       addOutput(''); // Blank line before
-      addOutput(`🤔 User: ${input}`, 'info');
+      addOutput(`----------------------------------\n🤔 User: \n${input}`, 'info');
       addOutput(`🤖 Assistant: `, 'assistant');
 
-      // Process query with agent
+      // Use React loop by default for extended reasoning
+      // Users can opt for single-step with /single prefix
+      const settings = settingsManager.getSettings();
       try {
-        await agentManager.processQuery(input);
+        if (input.startsWith('/single ')) {
+          const actualQuery = input.substring(8).trim();
+          await agentManager.processQuery(actualQuery);
+        } else {
+          await agentManager.processQueryInReactLoop(input, settings.maxSteps);
+        }
       } catch (error) {
         addOutput(`\nAgent error: ${(error as Error).message}`, 'error');
       }

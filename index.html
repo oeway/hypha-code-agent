@@ -359,6 +359,18 @@
                     />
                     <small>Your workspace name on Hypha</small>
                 </div>
+
+                <div class="form-group">
+                    <label for="maxSteps">Max Reasoning Steps</label>
+                    <input
+                        type="number"
+                        id="maxSteps"
+                        placeholder="10"
+                        min="1"
+                        max="50"
+                    />
+                    <small>Maximum reasoning steps for React loop (1-50, default: 10)</small>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="button-secondary" id="cancelSettingsBtn">Cancel</button>
@@ -375,14 +387,14 @@
         <div class="terminal-input-area">
             <div class="input-wrapper">
                 <div class="mode-switch">
-                    <button id="scriptModeBtn" class="active" title="Execute Python code directly">Script</button>
-                    <button id="queryModeBtn" title="Ask AI agent to write and execute code">Query</button>
+                    <button id="scriptModeBtn" title="Execute Python code directly">Script</button>
+                    <button id="queryModeBtn" class="active" title="Ask AI agent to write and execute code">Query</button>
                 </div>
                 <input
                     type="text"
                     class="terminal-input"
                     id="terminalInput"
-                    placeholder="Type Python code here (Press Enter to execute)..."
+                    placeholder="Ask AI to write and execute code (Press Enter to send)..."
                     disabled
                 />
             </div>

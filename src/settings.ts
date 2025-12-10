@@ -10,6 +10,9 @@ export interface AgentSettings {
   // Hypha Configuration
   hyphaServerUrl: string;
   hyphaWorkspace: string;
+
+  // Agent Behavior
+  maxSteps: number; // Maximum reasoning steps for React loop
 }
 
 const DEFAULT_SETTINGS: AgentSettings = {
@@ -18,7 +21,8 @@ const DEFAULT_SETTINGS: AgentSettings = {
   openaiModel: 'qwen2.5-coder:7b',
   openaiApiKey: 'ollama',
   hyphaServerUrl: 'https://hypha.aicell.io',
-  hyphaWorkspace: 'default'
+  hyphaWorkspace: 'default',
+  maxSteps: 25
 };
 
 const STORAGE_KEY = 'hypha-code-agent-settings';

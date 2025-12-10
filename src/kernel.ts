@@ -55,6 +55,12 @@ export class KernelManager {
     this.onStatusChange = onStatusChange;
   }
 
+  // Strip ANSI escape codes from text
+  private stripAnsi(text: string): string {
+    // eslint-disable-next-line no-control-regex
+    return text.replace(/\x1b\[[0-9;]*m/g, '').replace(/\[[0-9;]*m/g, '');
+  }
+
   async initialize(): Promise<void> {
     try {
       this.onStatusChange('initializing', 'Loading kernel module...');
@@ -197,7 +203,11 @@ export class KernelManager {
 
           if (event.data?.traceback) {
             event.data.traceback.forEach((line: string) => {
-              if (line.trim()) this.onOutput(line, 'error');
+              if (line.trim()) {
+                // Strip ANSI escape codes from traceback
+                const cleanLine = this.stripAnsi(line);
+                this.onOutput(cleanLine, 'error');
+              }
             });
           }
         }

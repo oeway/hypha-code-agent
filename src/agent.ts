@@ -16,20 +16,64 @@ export interface AgentResponse {
 }
 
 // System prompt for the code agent
-const SYSTEM_PROMPT = `You are a helpful AI coding assistant with access to a Python kernel running in the browser.
+const SYSTEM_PROMPT = `You are a powerful AI coding assistant with access to a Python kernel running in the browser.
 
-You can execute Python code to help users with their tasks. When you need to run Python code, you must initialize a tool call to the \`executeCode\` function.
+**FUNDAMENTAL REQUIREMENT: ALWAYS EXECUTE CODE USING TOOLS**
+- You must ALWAYS use the \`executeCode\` tool to run Python code - never just show code to the user
+- Only provide code snippets in your text responses if the user explicitly asks to see the code
+- Otherwise, directly execute code via the tool without showing it in your response
+- Transform user requests into executable Python code and run it immediately
+- Your primary mode of operation is executing code, not explaining theoretical concepts
 
-Guidelines:
-- Write clean, well-documented Python code
-- Explain what the code does before executing it
+**Runtime Environment**
+You are running in a **Pyodide-based Jupyter notebook environment** in the user's browser:
+- **Platform**: Pyodide (Python in WebAssembly) running in browser
+- **Jupyter Notebook**: Full notebook environment with persistent state between executions
+- **Top-Level Await**: You can use \`await\` directly - **NO need for \`asyncio.run()\`**
+  - ✅ Correct: \`result = await some_async_function()\`
+  - ❌ Wrong: \`asyncio.run(some_async_function())\` (don't use this!)
+- **State Persistence**: All variables, imports, and data persist between code executions
+- **Automatic Display**: Matplotlib/Plotly plots display automatically - no need to save/show
+- **Package Management**: Use \`import micropip; await micropip.install('package-name')\`
+- **Network**: HTTP requests available through standard requests library
+- **File System**: Limited file system access (browser environment)
+
+**Multi-Step Reasoning Approach**
+For complex queries, use the multi-step React loop to:
+1. **Analyze**: Break down the problem into smaller steps
+2. **Plan**: Outline your approach before coding
+3. **Execute**: Run code step-by-step, building context gradually
+4. **Observe**: Check execution results and adapt your approach
+5. **Iterate**: Continue until the task is complete
+
+Example workflow for complex tasks:
+- First execution: Import libraries and explore data structure
+- Second execution: Process/analyze data based on what you learned
+- Third execution: Generate visualizations or final results
+- Use print() statements liberally to make outputs visible
+
+**Code Execution Guidelines**
+- Write clean, well-commented Python code
+- Use print() statements to output results - only printed output is visible
 - Handle errors gracefully and explain what went wrong
-- Use the Python kernel's available libraries (NumPy, Matplotlib, etc.)
-- For data visualization, use matplotlib with inline backend
-- Keep code concise and focused on the task
+- If code fails, analyze the error and try alternative approaches
+- Available libraries: NumPy, Matplotlib, Pandas (via micropip), and Python standard library
+- For visualization: matplotlib and plotly work with inline display
 
-The Python kernel is initialized and ready. You can execute code immediately.
-It's a pyodide based python jupyter kernel, so be aware of the limitations in the web environment.
+**Critical Principles**
+- **Be Factual**: Only state information you know to be true. Don't make up facts, URLs, or capabilities
+- **Verify Results**: Always check execution outputs before making claims about results
+- **Admit Uncertainty**: If you're unsure about something, say so and test it with code
+- **Iterate on Errors**: When code fails, analyze the error message carefully and adapt your approach
+- **Build Context**: In multi-step tasks, save intermediate results to variables for reuse
+
+**Output Requirements**
+- **Execute, Don't Explain**: Run code instead of describing what code would do
+- **Use print()**: Essential for making data visible across execution steps
+- **Show Progress**: For long operations, print intermediate status updates
+- **Summarize Results**: After execution, briefly explain what was accomplished
+
+The Python kernel is initialized and ready. Execute code immediately to help users accomplish their tasks.
 `;
 
 export class AgentManager {
@@ -230,12 +274,13 @@ export class AgentManager {
     const codeLines = code.split('\n');
     codeLines.forEach((line, index) => {
       if (index === 0) {
-        this.onOutput(`>>> ${line}`, 'info');
+        this.onOutput("```python", 'info');
+        this.onOutput(`${line}`, 'info');
       } else if (line.trim()) {
-        this.onOutput(`... ${line}`, 'info');
+        this.onOutput(`${line}`, 'info');
       }
     });
-    this.onOutput(''); // Blank line after code
+    this.onOutput('```'); // Blank line after code
 
     try {
       // Execute code using kernel
@@ -319,5 +364,158 @@ export class AgentManager {
 
   getConversationHistory(): AgentMessage[] {
     return [...this.conversationHistory];
+  }
+
+  /**
+   * Process query with React loop for extended reasoning and error recovery
+   * Allows multiple rounds of tool execution and reasoning
+   */
+  async processQueryInReactLoop(userQuery: string, maxSteps: number = 10): Promise<void> {
+    if (!this.client) {
+      throw new Error('OpenAI client not initialized');
+    }
+
+    if (!this.kernelManager.isInitialized()) {
+      throw new Error('Kernel not initialized');
+    }
+
+    // Add user message to history
+    this.conversationHistory.push({
+      role: 'user',
+      content: userQuery
+    });
+
+    let loopCount = 0;
+
+    try {
+      // React loop: keep calling LLM until it stops requesting tools or max steps reached
+      while (loopCount < maxSteps) {
+        loopCount++;
+
+        // Call OpenAI with streaming and function calling
+        const response = await this.client.chat.completions.create({
+          model: this.settings.openaiModel,
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            ...this.conversationHistory
+          ],
+          tools: [
+            {
+              type: 'function',
+              function: {
+                name: 'executeCode',
+                description: 'Execute Python code in the browser-based Python kernel. Use this to run Python code, perform calculations, create visualizations, or process data.',
+                parameters: {
+                  type: 'object',
+                  properties: {
+                    code: {
+                      type: 'string',
+                      description: 'The Python code to execute. Can be multiple lines.'
+                    },
+                    explanation: {
+                      type: 'string',
+                      description: 'A brief explanation of what this code does and why you are running it.'
+                    }
+                  },
+                  required: ['code', 'explanation']
+                }
+              }
+            }
+          ],
+          stream: true,
+          temperature: 0.7
+        });
+
+        // Use messageReducer pattern from OpenAI example
+        let message: any = { role: 'assistant', content: '' };
+        let isFirstChunk = true;
+
+        // Process streaming response and accumulate complete message
+        for await (const chunk of response) {
+          message = this.messageReducer(message, chunk);
+
+          // Stream content to output
+          const delta = chunk.choices[0]?.delta;
+          if (delta?.content) {
+            this.onOutput(delta.content, 'assistant', !isFirstChunk);
+            isFirstChunk = false;
+          }
+        }
+
+        // Add assistant message to history
+        this.conversationHistory.push({
+          role: 'assistant',
+          content: message.content || '',
+          ...(message.tool_calls && { tool_calls: message.tool_calls })
+        } as any);
+
+        // Check if there are tool calls to execute
+        if (message.tool_calls && message.tool_calls.length > 0) {
+          let hasExecutedTools = false;
+
+          // Execute tool calls
+          for (const toolCall of message.tool_calls) {
+            if (toolCall.type === 'function' && toolCall.function.name === 'executeCode') {
+              hasExecutedTools = true;
+
+              try {
+                const args = JSON.parse(toolCall.function.arguments);
+                const result = await this.executeCodeTool(args.code, args.explanation);
+
+                // Add tool result to conversation history
+                this.conversationHistory.push({
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: JSON.stringify({ success: result.success, output: result.output })
+                } as any);
+
+              } catch (error) {
+                this.onOutput(`Error executing code: ${(error as Error).message}`, 'error');
+
+                // Add error to conversation history for recovery
+                this.conversationHistory.push({
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: JSON.stringify({ success: false, error: (error as Error).message })
+                } as any);
+              }
+            }
+          }
+
+          // If we executed tools, continue the loop for next reasoning step
+          if (hasExecutedTools) {
+            // Show reasoning loop indicator after completing a step
+            this.onOutput(''); // Blank line
+            this.onOutput(`----Reasoning Step ${loopCount}----`, 'info');
+
+            // Add reminder if approaching max steps
+            if (loopCount >= maxSteps - 2) {
+              this.conversationHistory.push({
+                role: 'user',
+                content: `⚠ You are approaching the maximum number of reasoning steps (${maxSteps}). Please provide a final response summarizing your work.`
+              });
+            }
+            continue; // Continue to next iteration
+          }
+        }
+
+        // No tool calls - final response received, exit loop
+        this.onOutput(''); // Blank line
+        this.onOutput('----------------------------------', 'info');
+        break;
+      }
+
+      // Check if we hit max steps
+      if (loopCount >= maxSteps) {
+        this.onOutput(''); // Blank line
+        this.onOutput(`⚠ Reached maximum reasoning steps (${maxSteps})`, 'info');
+      }
+
+    } catch (error) {
+      const errorMsg = `Agent error: ${(error as Error).message}`;
+      this.onOutput(errorMsg, 'error');
+      console.error('Agent processing error:', error);
+      throw error;
+    }
   }
 }
