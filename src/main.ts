@@ -463,6 +463,7 @@ connectBtn.addEventListener('click', async () => {
     await hyphaService.connect({
       serverUrl: settings.hyphaServerUrl,
       workspace: settings.hyphaWorkspace,
+      clientId: urlParams.client_id,
       serviceId: urlParams.service_id || 'hypha-code-agent',
       visibility: urlParams.visibility || 'protected',
       token: urlParams.token

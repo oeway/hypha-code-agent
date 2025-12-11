@@ -7,6 +7,7 @@ export interface HyphaServiceConfig {
   serverUrl: string;
   workspace: string;
   token?: string;
+  clientId?: string;
   serviceId?: string;
   visibility?: 'public' | 'protected';
 }
@@ -125,13 +126,21 @@ export class HyphaService {
 
       const connectionConfig: any = {
         server_url: config.serverUrl,
-        token: token,
-        method_timeout: 180000
+        method_timeout: 180
       };
+      // Only add token if not null
+      if (token) {
+        connectionConfig.token = token;
+      }
 
       // Only add workspace if it's not null
       if (workspace) {
         connectionConfig.workspace = workspace;
+      }
+
+      // Add client_id if provided
+      if (config.clientId) {
+        connectionConfig.client_id = config.clientId;
       }
 
       this.server = await hyphaClient.connectToServer(connectionConfig);

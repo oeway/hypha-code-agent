@@ -5,6 +5,7 @@ export interface UrlParams {
   server_url?: string;
   workspace?: string;
   token?: string;
+  client_id?: string;
   service_id?: string;
   visibility?: 'public' | 'protected';
 
@@ -59,6 +60,9 @@ export function parseUrlParams(): UrlParams {
 
   const token = params.get('token');
   if (token) result.token = token;
+
+  const clientId = params.get('client_id');
+  if (clientId) result.client_id = clientId;
 
   const serviceId = params.get('service_id');
   if (serviceId) result.service_id = serviceId;

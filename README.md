@@ -147,6 +147,7 @@ You can configure the agent silently via URL parameters, perfect for embedding o
 - `server_url` - Hypha server URL (default: `https://hypha.aicell.io`)
 - `workspace` - Hypha workspace name
 - `token` - Authentication token (auto-connects if provided)
+- `client_id` - Custom client ID for Hypha connection
 - `service_id` - Custom service ID (default: `hypha-code-agent`)
 - `visibility` - Service visibility: `public` or `protected` (default: `protected`)
 
