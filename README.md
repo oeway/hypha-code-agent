@@ -240,9 +240,21 @@ Once connected, your code agent becomes available as:
 
 ### Available Service Methods
 
+#### Synchronous Methods
 - `chatCompletion(messages, model, temperature, stream, max_steps)` - OpenAI-compatible chat endpoint with code execution
 - `executeCode(code)` - Direct Python code execution
-- `getServiceInfo()` - Get service information and status
+- `updateSettings(settings)` - Update agent settings remotely
+- `getConversation()` - Retrieve current conversation history
+- `clearConversation()` - Clear the conversation history
+
+#### Asynchronous Job Queue Methods
+- `submitChatJob(messages, max_steps)` - Submit chat completion job, returns job ID immediately
+- `submitCodeJob(code)` - Submit code execution job, returns job ID immediately
+- `getJobStatus(jobId)` - Get status and result of a submitted job
+- `cancelJob(jobId)` - Cancel a queued job (only works for queued jobs)
+- `listJobs()` - List all jobs with their status
+
+Jobs are queued and executed sequentially in submission order. Job statuses: `queued`, `running`, `completed`, `failed`, `cancelled`.
 
 Settings are stored in browser localStorage and persist across sessions.
 

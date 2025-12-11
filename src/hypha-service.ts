@@ -12,6 +12,18 @@ export interface HyphaServiceConfig {
   visibility?: 'public' | 'protected';
 }
 
+interface Job {
+  id: string;
+  type: 'chat' | 'code';
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  submittedAt: number;
+  startedAt?: number;
+  completedAt?: number;
+  input: any;
+  result?: any;
+  error?: string;
+}
+
 export class HyphaService {
   private server: any = null;
   private serviceId: string | null = null;
@@ -20,6 +32,11 @@ export class HyphaService {
   private kernelManager: KernelManager;
   private agentManager: AgentManager | null;
   private settings: AgentSettings;
+
+  // Job queue system
+  private jobs: Map<string, Job> = new Map();
+  private jobQueue: string[] = [];
+  private isProcessingQueue: boolean = false;
 
   constructor(
     settings: AgentSettings,
@@ -298,6 +315,233 @@ export class HyphaService {
             }
           },
           { __schema__: executeCodeSchema }
+        ),
+
+        // Update agent settings
+        updateSettings: Object.assign(
+          async ({ settings }: { settings: Partial<AgentSettings> }, _context?: any) => {
+            this.onOutput(`🌐 Remote call: updateSettings()`, 'info');
+
+            try {
+              // Update local settings
+              const currentSettings = this.settings;
+              const newSettings = { ...currentSettings, ...settings };
+              this.settings = newSettings;
+
+              // Update agent manager if available
+              if (this.agentManager) {
+                this.agentManager.updateSettings(newSettings);
+              }
+
+              this.onOutput(`✓ Settings updated successfully`, 'info');
+              return { success: true, message: 'Settings updated' };
+            } catch (error) {
+              this.onOutput(`Update settings error: ${(error as Error).message}`, 'error');
+              throw error;
+            }
+          },
+          {
+            __schema__: {
+              name: 'updateSettings',
+              description: 'Update agent settings',
+              parameters: {
+                type: 'object',
+                properties: {
+                  settings: {
+                    type: 'object',
+                    description: 'Partial agent settings to update'
+                  }
+                },
+                required: ['settings']
+              }
+            }
+          }
+        ),
+
+        // Get conversation history
+        getConversation: Object.assign(
+          async (_params: any, _context?: any) => {
+            this.onOutput(`🌐 Remote call: getConversation()`, 'info');
+
+            if (!this.agentManager) {
+              throw new Error('Agent manager not initialized');
+            }
+
+            try {
+              const history = this.agentManager.getConversationHistory();
+              this.onOutput(`✓ Retrieved ${history.length} conversation messages`, 'info');
+              return { success: true, history };
+            } catch (error) {
+              this.onOutput(`Get conversation error: ${(error as Error).message}`, 'error');
+              throw error;
+            }
+          },
+          {
+            __schema__: {
+              name: 'getConversation',
+              description: 'Get the current conversation history',
+              parameters: {
+                type: 'object',
+                properties: {}
+              }
+            }
+          }
+        ),
+
+        // Clear conversation history
+        clearConversation: Object.assign(
+          async (_params: any, _context?: any) => {
+            this.onOutput(`🌐 Remote call: clearConversation()`, 'info');
+
+            if (!this.agentManager) {
+              throw new Error('Agent manager not initialized');
+            }
+
+            try {
+              this.agentManager.clearHistory();
+              this.onOutput(`✓ Conversation history cleared`, 'info');
+              return { success: true, message: 'Conversation cleared' };
+            } catch (error) {
+              this.onOutput(`Clear conversation error: ${(error as Error).message}`, 'error');
+              throw error;
+            }
+          },
+          {
+            __schema__: {
+              name: 'clearConversation',
+              description: 'Clear the conversation history',
+              parameters: {
+                type: 'object',
+                properties: {}
+              }
+            }
+          }
+        ),
+
+        // Submit chat job (async with job ID)
+        submitChatJob: Object.assign(
+          async ({ messages, max_steps }: { messages: any[]; max_steps?: number }, _context?: any) => {
+            this.onOutput(`🌐 Remote call: submitChatJob()`, 'info');
+            const jobId = this.submitChatJob(messages, max_steps);
+            return { jobId };
+          },
+          {
+            __schema__: {
+              name: 'submitChatJob',
+              description: 'Submit a chat completion job and return immediately with a job ID',
+              parameters: {
+                type: 'object',
+                properties: {
+                  messages: {
+                    type: 'array',
+                    description: 'Array of chat messages'
+                  },
+                  max_steps: {
+                    type: 'number',
+                    description: 'Maximum reasoning steps'
+                  }
+                },
+                required: ['messages']
+              }
+            }
+          }
+        ),
+
+        // Submit code execution job (async with job ID)
+        submitCodeJob: Object.assign(
+          async ({ code }: { code: string }, _context?: any) => {
+            this.onOutput(`🌐 Remote call: submitCodeJob()`, 'info');
+            const jobId = this.submitCodeJob(code);
+            return { jobId };
+          },
+          {
+            __schema__: {
+              name: 'submitCodeJob',
+              description: 'Submit a code execution job and return immediately with a job ID',
+              parameters: {
+                type: 'object',
+                properties: {
+                  code: {
+                    type: 'string',
+                    description: 'Python code to execute'
+                  }
+                },
+                required: ['code']
+              }
+            }
+          }
+        ),
+
+        // Get job status
+        getJobStatus: Object.assign(
+          async ({ jobId }: { jobId: string }, _context?: any) => {
+            this.onOutput(`🌐 Remote call: getJobStatus(${jobId})`, 'info');
+            const job = this.getJobStatus(jobId);
+            if (!job) {
+              throw new Error(`Job not found: ${jobId}`);
+            }
+            return job;
+          },
+          {
+            __schema__: {
+              name: 'getJobStatus',
+              description: 'Get the status of a submitted job',
+              parameters: {
+                type: 'object',
+                properties: {
+                  jobId: {
+                    type: 'string',
+                    description: 'The job ID to check'
+                  }
+                },
+                required: ['jobId']
+              }
+            }
+          }
+        ),
+
+        // Cancel job
+        cancelJob: Object.assign(
+          async ({ jobId }: { jobId: string }, _context?: any) => {
+            this.onOutput(`🌐 Remote call: cancelJob(${jobId})`, 'info');
+            const cancelled = this.cancelJob(jobId);
+            return { success: cancelled, message: cancelled ? 'Job cancelled' : 'Cannot cancel job (not queued or not found)' };
+          },
+          {
+            __schema__: {
+              name: 'cancelJob',
+              description: 'Cancel a queued job by its ID',
+              parameters: {
+                type: 'object',
+                properties: {
+                  jobId: {
+                    type: 'string',
+                    description: 'The job ID to cancel'
+                  }
+                },
+                required: ['jobId']
+              }
+            }
+          }
+        ),
+
+        // List all jobs
+        listJobs: Object.assign(
+          async (_params: any, _context?: any) => {
+            this.onOutput(`🌐 Remote call: listJobs()`, 'info');
+            const jobs = this.listJobs();
+            return { jobs };
+          },
+          {
+            __schema__: {
+              name: 'listJobs',
+              description: 'List all jobs (queued, running, completed, failed, cancelled)',
+              parameters: {
+                type: 'object',
+                properties: {}
+              }
+            }
+          }
         )
       });
 
@@ -342,5 +586,143 @@ export class HyphaService {
       this.onOutput(`Disconnect error: ${(error as Error).message}`, 'error');
       throw error;
     }
+  }
+
+  // Job Queue Management Methods
+
+  private generateJobId(): string {
+    return `job_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  }
+
+  private async processJobQueue(): Promise<void> {
+    if (this.isProcessingQueue || this.jobQueue.length === 0) {
+      return;
+    }
+
+    this.isProcessingQueue = true;
+
+    while (this.jobQueue.length > 0) {
+      const jobId = this.jobQueue[0];
+      const job = this.jobs.get(jobId);
+
+      if (!job || job.status === 'cancelled') {
+        this.jobQueue.shift();
+        continue;
+      }
+
+      // Update job status
+      job.status = 'running';
+      job.startedAt = Date.now();
+      this.onOutput(`[Job ${jobId}] Started processing`, 'info');
+
+      try {
+        if (job.type === 'chat') {
+          // Process chat completion
+          const { messages, max_steps } = job.input;
+          const maxSteps = max_steps || this.settings.maxSteps;
+          const userMessage = messages[messages.length - 1]?.content || '';
+
+          if (!this.agentManager) {
+            throw new Error('Agent manager not initialized');
+          }
+
+          await this.agentManager.processQueryInReactLoop(userMessage, maxSteps);
+          job.result = { success: true, message: 'Query processed successfully' };
+        } else if (job.type === 'code') {
+          // Process code execution
+          const { code } = job.input;
+
+          if (!this.kernelManager.isInitialized()) {
+            throw new Error('Kernel not initialized');
+          }
+
+          const result = await this.kernelManager.executeCode(code);
+          job.result = result;
+        }
+
+        job.status = 'completed';
+        job.completedAt = Date.now();
+        this.onOutput(`[Job ${jobId}] Completed`, 'info');
+      } catch (error) {
+        job.status = 'failed';
+        job.completedAt = Date.now();
+        job.error = (error as Error).message;
+        this.onOutput(`[Job ${jobId}] Failed: ${job.error}`, 'error');
+      }
+
+      // Remove from queue
+      this.jobQueue.shift();
+    }
+
+    this.isProcessingQueue = false;
+  }
+
+  submitChatJob(messages: any[], max_steps?: number): string {
+    const jobId = this.generateJobId();
+    const job: Job = {
+      id: jobId,
+      type: 'chat',
+      status: 'queued',
+      submittedAt: Date.now(),
+      input: { messages, max_steps }
+    };
+
+    this.jobs.set(jobId, job);
+    this.jobQueue.push(jobId);
+    this.onOutput(`[Job ${jobId}] Queued (chat completion)`, 'info');
+
+    // Start processing queue
+    this.processJobQueue().catch((error) => {
+      console.error('Job queue processing error:', error);
+    });
+
+    return jobId;
+  }
+
+  submitCodeJob(code: string): string {
+    const jobId = this.generateJobId();
+    const job: Job = {
+      id: jobId,
+      type: 'code',
+      status: 'queued',
+      submittedAt: Date.now(),
+      input: { code }
+    };
+
+    this.jobs.set(jobId, job);
+    this.jobQueue.push(jobId);
+    this.onOutput(`[Job ${jobId}] Queued (code execution)`, 'info');
+
+    // Start processing queue
+    this.processJobQueue().catch((error) => {
+      console.error('Job queue processing error:', error);
+    });
+
+    return jobId;
+  }
+
+  getJobStatus(jobId: string): Job | null {
+    return this.jobs.get(jobId) || null;
+  }
+
+  cancelJob(jobId: string): boolean {
+    const job = this.jobs.get(jobId);
+    if (!job) {
+      return false;
+    }
+
+    if (job.status === 'queued') {
+      job.status = 'cancelled';
+      job.completedAt = Date.now();
+      this.onOutput(`[Job ${jobId}] Cancelled`, 'info');
+      return true;
+    }
+
+    // Cannot cancel running or completed jobs
+    return false;
+  }
+
+  listJobs(): Job[] {
+    return Array.from(this.jobs.values()).sort((a, b) => a.submittedAt - b.submittedAt);
   }
 }
