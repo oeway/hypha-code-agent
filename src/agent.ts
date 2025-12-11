@@ -151,7 +151,7 @@ export class AgentManager {
       ];
 
       // Debug: Log full chat messages
-      console.log('[Agent] Chat completion messages:', JSON.stringify(messages, null, 2));
+      console.log('[Agent] Chat completion messages:', messages);
 
       // Call OpenAI with streaming and function calling
       const response = await this.client.chat.completions.create({
@@ -326,17 +326,29 @@ export class AgentManager {
               outputParts.push(this.shortenOutput(data['text/plain'], 'text'));
             }
           }
-        } else if (evt.type === 'error') {
+        } else if (evt.type === 'error' || evt.type === 'execute_error') {
           const errorMsg = `${evt.data?.ename}: ${evt.data?.evalue}`;
           outputParts.push(errorMsg);
           if (evt.data?.traceback && evt.data.traceback.length > 0) {
-            // Include first few lines of traceback
-            outputParts.push(evt.data.traceback.slice(0, 3).join('\n'));
+            // Include first few lines of traceback, strip ANSI codes
+            const cleanTraceback = evt.data.traceback
+              .slice(0, 5)  // Increase to 5 lines for more context
+              .map((line: string) => this.stripAnsiCodes(line))
+              .join('\n');
+            outputParts.push(cleanTraceback);
           }
         }
       }
 
       const output = outputParts.join('\n').trim();
+
+      // Debug: Log execution result details
+      console.log('[Agent] Code execution result:', {
+        success: result.success,
+        outputParts,
+        output,
+        resultError: result.error
+      });
 
       return {
         success: result.success,
@@ -354,12 +366,21 @@ export class AgentManager {
     }
   }
 
+  // Strip ANSI escape codes from text
+  private stripAnsiCodes(text: string): string {
+    // Remove ANSI escape sequences (colors, formatting, etc.)
+    return text.replace(/\x1b\[[0-9;]*m/g, '');
+  }
+
   // Shorten output for tool results to avoid context overflow
   private shortenOutput(text: string, _type: 'text' | 'html' | 'json'): string {
     const MAX_LENGTH = 1000; // Max characters for tool result
     const MAX_LINES = 20; // Max lines for tool result
 
     if (!text) return '';
+
+    // Remove ANSI codes first
+    text = this.stripAnsiCodes(text);
 
     // Remove excessive whitespace
     text = text.trim();
@@ -416,7 +437,7 @@ export class AgentManager {
         ];
 
         // Debug: Log full chat messages
-        console.log(`[Agent] React Loop Step ${loopCount}/${maxSteps} - Chat completion messages:`, JSON.stringify(messages, null, 2));
+        console.log(`[Agent] React Loop Step ${loopCount}/${maxSteps} - Chat completion messages:`, messages);
 
         // Call OpenAI with streaming and function calling
         const response = await this.client.chat.completions.create({
