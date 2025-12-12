@@ -24,6 +24,21 @@ interface Job {
   error?: string;
 }
 
+export interface InstalledService {
+  id: string;
+  name: string;
+  description: string;
+  serviceUrl: string;
+  // Functions/methods available in this service
+  functions?: Array<{
+    name: string;
+    description: string;
+    parameters?: any;
+  }>;
+  // Full service schema (for generating system prompts)
+  schema?: any;
+}
+
 export class HyphaService {
   private server: any = null;
   private serviceId: string | null = null;
@@ -37,6 +52,11 @@ export class HyphaService {
   private jobs: Map<string, Job> = new Map();
   private jobQueue: string[] = [];
   private isProcessingQueue: boolean = false;
+
+  // Service installation system
+  private installedServices: InstalledService[] = [];
+  private servicePrompt: string = '';
+  private baseSystemPrompt: string = ''; // Store the base prompt without service info
 
   constructor(
     settings: AgentSettings,
@@ -52,10 +72,42 @@ export class HyphaService {
 
   updateSettings(settings: AgentSettings): void {
     this.settings = settings;
+    // Store the base system prompt (without service info)
+    if (settings.systemPrompt) {
+      this.baseSystemPrompt = settings.systemPrompt;
+    }
+    // Update combined prompt with services
+    this.updateCombinedSystemPrompt();
   }
 
   updateAgentManager(agentManager: AgentManager): void {
     this.agentManager = agentManager;
+  }
+
+  /**
+   * Update the system prompt in settings to include service information
+   * This keeps AgentManager agnostic to HyphaService
+   */
+  private updateCombinedSystemPrompt(): void {
+    let combinedPrompt = this.baseSystemPrompt;
+
+    // Append service prompt if services are installed
+    if (this.servicePrompt) {
+      combinedPrompt = combinedPrompt
+        ? `${combinedPrompt}\n\n${this.servicePrompt}`
+        : this.servicePrompt;
+    }
+
+    // Update settings with combined prompt
+    this.settings = {
+      ...this.settings,
+      systemPrompt: combinedPrompt
+    };
+
+    // Update agent manager with new settings
+    if (this.agentManager) {
+      this.agentManager.updateSettings(this.settings);
+    }
   }
 
   isConnected(): boolean {
@@ -542,6 +594,75 @@ export class HyphaService {
               }
             }
           }
+        ),
+
+        // Install a Hypha service
+        installService: Object.assign(
+          async ({ serviceUrl }: { serviceUrl: string }, _context?: any) => {
+            this.onOutput(`🌐 Remote call: installService(${serviceUrl})`, 'info');
+            const service = await this.installService(serviceUrl);
+            return { success: true, service };
+          },
+          {
+            __schema__: {
+              name: 'installService',
+              description: 'Install a Hypha service by fetching its schema and metadata',
+              parameters: {
+                type: 'object',
+                properties: {
+                  serviceUrl: {
+                    type: 'string',
+                    description: 'Full service URL (e.g., https://hypha.aicell.io/workspace/services/client:service)'
+                  }
+                },
+                required: ['serviceUrl']
+              }
+            }
+          }
+        ),
+
+        // Remove an installed service
+        removeService: Object.assign(
+          async ({ serviceId }: { serviceId: string }, _context?: any) => {
+            this.onOutput(`🌐 Remote call: removeService(${serviceId})`, 'info');
+            const removed = this.removeService(serviceId);
+            return { success: removed, message: removed ? 'Service removed' : 'Service not found' };
+          },
+          {
+            __schema__: {
+              name: 'removeService',
+              description: 'Remove an installed service by its ID',
+              parameters: {
+                type: 'object',
+                properties: {
+                  serviceId: {
+                    type: 'string',
+                    description: 'The service ID to remove'
+                  }
+                },
+                required: ['serviceId']
+              }
+            }
+          }
+        ),
+
+        // List installed services
+        listInstalledServices: Object.assign(
+          async (_params: any, _context?: any) => {
+            this.onOutput(`🌐 Remote call: listInstalledServices()`, 'info');
+            const services = this.getInstalledServices();
+            return { services };
+          },
+          {
+            __schema__: {
+              name: 'listInstalledServices',
+              description: 'Get list of all installed Hypha services',
+              parameters: {
+                type: 'object',
+                properties: {}
+              }
+            }
+          }
         )
       });
 
@@ -724,5 +845,386 @@ export class HyphaService {
 
   listJobs(): Job[] {
     return Array.from(this.jobs.values()).sort((a, b) => a.submittedAt - b.submittedAt);
+  }
+
+  // Service Installation Management Methods
+
+  /**
+   * Install a Hypha service by fetching its schema and metadata
+   * @param serviceUrl - Full service URL (e.g., https://hypha.aicell.io/workspace/services/client:service)
+   */
+  async installService(serviceUrl: string): Promise<InstalledService> {
+    if (!this.server) {
+      throw new Error('Server not connected. Please connect to a Hypha server first.');
+    }
+
+    try {
+      this.onOutput(`[Service Install] Fetching service: ${serviceUrl}`, 'info');
+
+      // Parse the service URL
+      let targetServer = this.server;
+      let serviceQuery = serviceUrl;
+
+      // Check if it's a full URL
+      if (serviceUrl.startsWith('http://') || serviceUrl.startsWith('https://')) {
+        const url = new URL(serviceUrl);
+        const pathParts = url.pathname.split('/').filter(p => p);
+
+        // Expected format: /workspace/services/clientId:serviceId or /workspace/clientId:serviceId
+        if (pathParts.length < 2) {
+          throw new Error('Invalid service URL format. Expected: https://server/workspace/[services/]clientId:serviceId');
+        }
+
+        // Decode workspace (may contain URL-encoded characters)
+        const workspace = decodeURIComponent(pathParts[0]);
+
+        // Find the part with the colon (clientId:serviceId)
+        const servicePartIndex = pathParts.findIndex(p => p.includes(':'));
+        if (servicePartIndex === -1) {
+          throw new Error('Invalid service URL format. Service ID must be in format clientId:serviceId');
+        }
+
+        // Decode the service part before splitting
+        const servicePart = decodeURIComponent(pathParts[servicePartIndex]);
+        const [clientId, serviceId] = servicePart.split(':');
+
+        if (!clientId || !serviceId) {
+          throw new Error('Invalid service format. Expected format: clientId:serviceId');
+        }
+
+        // Construct the service query: workspace/clientId:serviceId
+        // Parts are already decoded, so no need to decode again
+        serviceQuery = `${workspace}/${clientId}:${serviceId}`;
+
+        this.onOutput(`[Service Install] Parsed: ${serviceQuery}`, 'info');
+
+        // For simplicity, we'll use the current server connection
+        // In hypha-agents, they connect to different servers if needed
+        // For now, we assume services are on the same server
+      }
+
+      // Fetch the actual service from Hypha server
+      const service = await targetServer.getService(serviceQuery);
+
+      if (!service) {
+        throw new Error(`Service not found: ${serviceQuery}`);
+      }
+
+      // Get the service schema and metadata via HTTP GET request
+      let schema: any = null;
+      let functions: InstalledService['functions'] = [];
+      let serviceName = '';
+      let serviceDescription = '';
+
+      // Extract service ID from the query (for display purposes)
+      const displayServiceId = serviceQuery.includes(':')
+        ? serviceQuery.split(':').pop() || serviceQuery
+        : serviceQuery.split('/').pop() || serviceQuery;
+
+      try {
+        this.onOutput(`[Service Install] Fetching schema via HTTP: ${serviceUrl}`, 'info');
+        const response = await fetch(serviceUrl);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const serviceData = await response.json();
+
+        // Get name and description
+        serviceName = serviceData.name || service.name || service.id || displayServiceId;
+        serviceDescription = serviceData.description || service.description || 'Hypha service';
+
+        // Get schema
+        if (serviceData.service_schema) {
+          schema = serviceData.service_schema;
+          this.onOutput(`[Service Install] Got service_schema with ${Object.keys(schema).length} functions`, 'info');
+
+          // Extract function information from schema
+          if (typeof schema === 'object') {
+            // Schema can be an array of tool definitions or an object with tool definitions
+            const toolDefinitions = Array.isArray(schema) ? schema : Object.values(schema);
+
+            functions = toolDefinitions.map((tool: any) => {
+              if (tool.function) {
+                return {
+                  name: tool.function.name || 'unknown',
+                  description: tool.function.description || '',
+                  parameters: tool.function.parameters || {}
+                };
+              }
+              return null;
+            }).filter(Boolean) as InstalledService['functions'];
+          }
+        } else {
+          this.onOutput('[Service Install] No service_schema found in HTTP response', 'info');
+        }
+      } catch (error) {
+        this.onOutput(`[Service Install] Error fetching schema via HTTP: ${(error as Error).message}`, 'info');
+        // Fallback to service object
+        serviceName = service.name || service.id || displayServiceId;
+        serviceDescription = service.description || 'Hypha service';
+      }
+
+      const newService: InstalledService = {
+        id: displayServiceId,
+        name: serviceName,
+        description: serviceDescription,
+        serviceUrl: serviceUrl,
+        functions: functions,
+        schema: schema
+      };
+
+      // Check if already exists
+      if (this.installedServices.some(s => s.serviceUrl === serviceUrl)) {
+        throw new Error(`Service "${serviceName}" is already installed`);
+      }
+
+      // Add to installed services
+      this.installedServices.push(newService);
+
+      // Regenerate service prompt and update agent settings
+      this.servicePrompt = this.generateServicePrompt(this.installedServices);
+      this.updateCombinedSystemPrompt();
+
+      this.onOutput(`[Service Install] Successfully installed: ${serviceName}`, 'info');
+
+      return newService;
+    } catch (error) {
+      this.onOutput(`[Service Install] Error: ${(error as Error).message}`, 'error');
+      throw error;
+    }
+  }
+
+  /**
+   * Remove an installed service by its ID
+   * @param serviceId - The service ID to remove
+   */
+  removeService(serviceId: string): boolean {
+    const serviceToRemove = this.installedServices.find(s => s.id === serviceId);
+
+    if (!serviceToRemove) {
+      this.onOutput(`[Service Remove] Service not found: ${serviceId}`, 'info');
+      return false;
+    }
+
+    // Remove from installed services
+    this.installedServices = this.installedServices.filter(s => s.id !== serviceId);
+
+    // Regenerate service prompt and update agent settings
+    this.servicePrompt = this.generateServicePrompt(this.installedServices);
+    this.updateCombinedSystemPrompt();
+
+    this.onOutput(`[Service Remove] Removed service: ${serviceId}`, 'info');
+    return true;
+  }
+
+  /**
+   * Get list of installed services
+   */
+  getInstalledServices(): InstalledService[] {
+    return [...this.installedServices];
+  }
+
+  /**
+   * Get the generated service prompt
+   */
+  getServicePrompt(adHocServiceIds?: string[]): string {
+    // If ad-hoc services are provided, generate a combined prompt
+    if (adHocServiceIds && adHocServiceIds.length > 0) {
+      // For now, just return the base prompt
+      // In a full implementation, we would fetch and include ad-hoc services
+      this.onOutput(`[Service Prompt] Ad-hoc services requested: ${adHocServiceIds.join(', ')}`, 'info');
+      return this.servicePrompt;
+    }
+    return this.servicePrompt;
+  }
+
+  /**
+   * Generate service prompt from installed services
+   * Based on hypha-agents environmentPrompt pattern
+   */
+  private generateServicePrompt(services: InstalledService[]): string {
+    if (services.length === 0) {
+      return '';
+    }
+
+    let prompt = '';
+
+    prompt += '---\n\n';
+    prompt += '## 🔌 INSTALLED HYPHA SERVICES\n\n';
+    prompt += `**You have ${services.length} external Hypha service${services.length > 1 ? 's' : ''} installed** that provide additional capabilities beyond Python code execution.\n\n`;
+
+    // Add general instructions for using Hypha services
+    prompt += '### How to Connect to Hypha and Use Services\n\n';
+    prompt += '**IMPORTANT**: To use Hypha services, you first need to connect to the Hypha server in Python.\n\n';
+
+    prompt += '#### Step 1: Install Required Packages and Connect\n\n';
+    prompt += '```python\n';
+    prompt += '# Install required packages (only needed once per session)\n';
+    prompt += 'import micropip\n';
+    prompt += 'await micropip.install(["imjoy-rpc", "pyodide-http"])\n\n';
+    prompt += '# Patch HTTP for Pyodide\n';
+    prompt += 'import pyodide_http\n';
+    prompt += 'pyodide_http.patch_all()\n\n';
+    prompt += '# Import and connect to Hypha\n';
+    prompt += 'from imjoy_rpc.hypha import connect_to_server\n\n';
+    prompt += '# Connect to the Hypha server\n';
+    prompt += 'server = await connect_to_server({\n';
+    prompt += '    "server_url": "https://hypha.aicell.io",\n';
+    prompt += '    "workspace": "your-workspace-name",  # Optional: specify workspace\n';
+    prompt += '    "token": "your-token"  # Optional: for authentication\n';
+    prompt += '})\n\n';
+    prompt += 'print(f"Connected to Hypha server: {server.config.workspace}")\n';
+    prompt += '```\n\n';
+
+    prompt += '**Note**: After connecting once, the `server` object is available for the rest of the session.\n\n';
+
+    prompt += '#### Step 2: Use Hypha Services\n\n';
+    prompt += 'Once connected, you can access any Hypha service:\n\n';
+    prompt += '```python\n';
+    prompt += '# Get a service by its ID\n';
+    prompt += 'my_service = await server.get_service("workspace/client-id:service-id")\n\n';
+    prompt += '# Call service functions (always use await)\n';
+    prompt += 'result = await my_service.some_function(param1="value", param2=123)\n';
+    prompt += 'print(result)\n';
+    prompt += '```\n\n';
+
+    prompt += '**CRITICAL**: All service calls are asynchronous and MUST use `await`!\n\n';
+
+    prompt += '### Available Services\n\n';
+    prompt += 'Below are the detailed specifications for each installed service:\n\n';
+
+    // List each service with its tools
+    services.forEach((service, index) => {
+      prompt += `#### Service ${index + 1}: ${service.name}\n\n`;
+      if (service.description) {
+        prompt += `**Description**: ${service.description}\n\n`;
+      }
+
+      // Parse service URL to get the service ID for get_service call
+      let serviceId = service.serviceUrl;
+      if (service.serviceUrl.startsWith('http://') || service.serviceUrl.startsWith('https://')) {
+        try {
+          const url = new URL(service.serviceUrl);
+          const pathParts = url.pathname.split('/').filter(p => p);
+          // Decode workspace and service part (may contain URL-encoded characters)
+          const workspace = decodeURIComponent(pathParts[0]);
+          const servicePart = pathParts.find(p => p.includes(':'));
+          if (workspace && servicePart) {
+            // Decode service part before constructing serviceId
+            serviceId = `${workspace}/${decodeURIComponent(servicePart)}`;
+          }
+        } catch (e) {
+          // Keep original serviceUrl if parsing fails
+        }
+      }
+
+      prompt += `**Service ID**: \`${serviceId}\`\n\n`;
+      prompt += '**How to get this service**:\n';
+      prompt += '```python\n';
+      prompt += `${service.id.replace(/-/g, '_')} = await server.get_service("${serviceId}")\n`;
+      prompt += '```\n\n';
+
+      // Show the complete service_schema
+      if (service.schema) {
+        // Convert array schema back to object format for display (if it's an array)
+        let schemaToDisplay = service.schema;
+        if (Array.isArray(service.schema)) {
+          // Convert array to object with function names as keys
+          schemaToDisplay = {};
+          service.schema.forEach((tool: any) => {
+            if (tool.function?.name) {
+              schemaToDisplay[tool.function.name] = tool;
+            }
+          });
+        }
+
+        const functionCount = service.functions?.length || Object.keys(schemaToDisplay).length;
+        prompt += `**Service Schema** (${functionCount} functions):\n\n`;
+        prompt += 'The following tools are available in this service with their complete argument schemas:\n\n';
+        prompt += '```json\n';
+        prompt += JSON.stringify(schemaToDisplay, null, 2);
+        prompt += '\n```\n\n';
+
+        // Show usage examples
+        prompt += '**Usage Examples**:\n\n';
+        const serviceName = service.id.replace(/-/g, '_');
+
+        if (service.functions && service.functions.length > 0) {
+          // Show examples for first 2-3 functions
+          const exampleFunctions = service.functions.slice(0, Math.min(3, service.functions.length));
+
+          exampleFunctions.forEach((func, idx) => {
+            prompt += `${idx + 1}. **${func.name}**`;
+            if (func.description) {
+              const shortDesc = func.description.length > 80
+                ? func.description.substring(0, 77) + '...'
+                : func.description;
+              prompt += ` - ${shortDesc}`;
+            }
+            prompt += '\n';
+
+            prompt += '   ```python\n';
+            prompt += `   result = await ${serviceName}.${func.name}(`;
+
+            if (func.parameters && func.parameters.properties) {
+              const params = Object.entries(func.parameters.properties);
+              const paramExamples = params.slice(0, 2).map(([name, info]: [string, any]) => {
+                const example = info.type === 'string' ? `"example"` :
+                               info.type === 'number' ? `42` :
+                               info.type === 'boolean' ? `True` :
+                               info.type === 'array' ? `[]` :
+                               info.type === 'object' ? `{}` : `None`;
+                return `${name}=${example}`;
+              });
+              prompt += paramExamples.join(', ');
+            }
+
+            prompt += ')\n';
+            prompt += '   print(result)\n';
+            prompt += '   ```\n\n';
+          });
+
+          // Add a complete workflow example
+          prompt += '**Complete Workflow Example**:\n';
+          prompt += '```python\n';
+          prompt += `# Step 1: Get the service\n`;
+          prompt += `${serviceName} = await server.get_service("${serviceId}")\n\n`;
+          prompt += `# Step 2: Use the service functions\n`;
+
+          const firstFunc = service.functions[0];
+          if (firstFunc.parameters && firstFunc.parameters.properties) {
+            const params = Object.entries(firstFunc.parameters.properties);
+            const paramExamples = params.slice(0, 2).map(([name, info]: [string, any]) => {
+              const example = info.type === 'string' ? `"example"` :
+                             info.type === 'number' ? `42` :
+                             info.type === 'boolean' ? `True` : `None`;
+              return `${name}=${example}`;
+            });
+            prompt += `result = await ${serviceName}.${firstFunc.name}(${paramExamples.join(', ')})\n`;
+          } else {
+            prompt += `result = await ${serviceName}.${firstFunc.name}()\n`;
+          }
+          prompt += 'print(result)\n';
+          prompt += '```\n\n';
+        }
+      } else if (service.functions && service.functions.length > 0) {
+        // Fallback if no schema but we have function info
+        prompt += `**Available Functions** (${service.functions.length}):\n`;
+        service.functions.forEach(func => {
+          prompt += `- **\`${func.name}\`**`;
+          if (func.description) {
+            prompt += `: ${func.description}`;
+          }
+          prompt += '\n';
+        });
+        prompt += '\n';
+      }
+
+      prompt += '---\n\n';
+    });
+
+    return prompt;
   }
 }

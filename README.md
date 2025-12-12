@@ -256,6 +256,38 @@ Once connected, your code agent becomes available as:
 
 Jobs are queued and executed sequentially in submission order. Job statuses: `queued`, `running`, `completed`, `failed`, `cancelled`.
 
+#### Service Installation Methods
+- `installService(serviceUrl)` - Install a Hypha service by fetching its schema and metadata
+- `removeService(serviceId)` - Remove an installed service by its ID
+- `listInstalledServices()` - Get list of all installed Hypha services
+
+When services are installed, their schemas are automatically injected into the agent's system prompt, making the agent aware of available service functions and how to use them.
+
+**Example Usage**:
+```python
+# Connect to the code agent service
+agent = await server.get_service("workspace/client-id:hypha-code-agent")
+
+# Install a Hypha service (e.g., bioengine-worker)
+result = await agent.installService(
+    serviceUrl="https://hypha.aicell.io/bioimage-io/services/bioengine-worker:bioengine"
+)
+
+# Now the agent knows about bioengine functions and can use them
+response = await agent.chatCompletion(
+    messages=[{
+        "role": "user",
+        "content": "Use the bioengine service to process an image"
+    }]
+)
+
+# List installed services
+services = await agent.listInstalledServices()
+
+# Remove a service when done
+await agent.removeService(serviceId="bioengine")
+```
+
 Settings are stored in browser localStorage and persist across sessions.
 
 ## Architecture

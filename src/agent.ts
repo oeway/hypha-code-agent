@@ -299,13 +299,13 @@ export class AgentManager {
     const codeLines = code.split('\n');
     codeLines.forEach((line, index) => {
       if (index === 0) {
-        this.onOutput("```python", 'info');
+        this.onOutput("```python\n-------", 'info');
         this.onOutput(`${line}`, 'info');
       } else if (line.trim()) {
         this.onOutput(`${line}`, 'info');
       }
     });
-    this.onOutput('```'); // Blank line after code
+    this.onOutput('```\n-------'); // Blank line after code
 
     try {
       // Execute code using kernel

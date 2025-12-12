@@ -48,6 +48,15 @@ const saveSettingsBtn = document.getElementById('saveSettingsBtn') as HTMLButton
 const openaiProviderSelect = document.getElementById('openaiProvider') as HTMLSelectElement;
 const openaiBaseUrlInput = document.getElementById('openaiBaseUrl') as HTMLInputElement;
 const openaiModelInput = document.getElementById('openaiModel') as HTMLInputElement;
+
+// Services modal elements
+const servicesModal = document.getElementById('servicesModal') as HTMLElement;
+const servicesBtn = document.getElementById('servicesBtn') as HTMLButtonElement;
+const closeServicesBtn = document.getElementById('closeServicesBtn') as HTMLButtonElement;
+const closeServicesBtn2 = document.getElementById('closeServicesBtn2') as HTMLButtonElement;
+const serviceUrlInput = document.getElementById('serviceUrl') as HTMLInputElement;
+const installServiceBtn = document.getElementById('installServiceBtn') as HTMLButtonElement;
+const installedServicesList = document.getElementById('installedServicesList') as HTMLElement;
 const openaiApiKeyInput = document.getElementById('openaiApiKey') as HTMLInputElement;
 const hyphaServerUrlInput = document.getElementById('hyphaServerUrl') as HTMLInputElement;
 const hyphaWorkspaceInput = document.getElementById('hyphaWorkspace') as HTMLInputElement;
@@ -166,6 +175,119 @@ settingsModal.addEventListener('click', (e) => {
   }
 });
 
+// Services Modal Functions
+function showServicesDialog() {
+  servicesModal.classList.add('show');
+  updateServicesList();
+}
+
+function hideServicesDialog() {
+  servicesModal.classList.remove('show');
+  serviceUrlInput.value = '';
+}
+
+function updateServicesList() {
+  if (!hyphaService) {
+    installedServicesList.innerHTML = '<div style="text-align: center; padding: 20px; color: #8b8b8b; font-size: 13px;">Not connected to Hypha</div>';
+    return;
+  }
+
+  const services = hyphaService.getInstalledServices();
+
+  if (services.length === 0) {
+    installedServicesList.innerHTML = '<div style="text-align: center; padding: 20px; color: #8b8b8b; font-size: 13px;">No services installed yet</div>';
+    return;
+  }
+
+  installedServicesList.innerHTML = services.map(service => `
+    <div class="service-item">
+      <div class="service-header">
+        <div class="service-name">${service.name}</div>
+        <button class="service-remove-btn" onclick="window.removeService('${service.id}')">Remove</button>
+      </div>
+      ${service.description ? `<div class="service-description">${service.description}</div>` : ''}
+      <div class="service-url">${service.serviceUrl}</div>
+      ${service.functions && service.functions.length > 0 ? `
+        <div class="service-functions">${service.functions.length} function(s) available</div>
+      ` : ''}
+    </div>
+  `).join('');
+}
+
+async function installService() {
+  const serviceUrl = serviceUrlInput.value.trim();
+
+  if (!serviceUrl) {
+    addOutput('✗ Please enter a service URL', 'error');
+    return;
+  }
+
+  if (!hyphaService) {
+    addOutput('✗ Not connected to Hypha server', 'error');
+    return;
+  }
+
+  if (!hyphaService.isConnected()) {
+    addOutput('✗ Please connect to Hypha server first', 'error');
+    return;
+  }
+
+  installServiceBtn.disabled = true;
+  installServiceBtn.textContent = 'Installing...';
+
+  try {
+    addOutput(`Installing service: ${serviceUrl}`, 'info');
+    const service = await hyphaService.installService(serviceUrl);
+    addOutput(`✓ Service installed: ${service.name}`, 'info');
+    serviceUrlInput.value = '';
+    updateServicesList();
+  } catch (error) {
+    addOutput(`✗ Failed to install service: ${(error as Error).message}`, 'error');
+  } finally {
+    installServiceBtn.disabled = false;
+    installServiceBtn.textContent = 'Install Service';
+  }
+}
+
+async function removeServiceById(serviceId: string) {
+  if (!hyphaService) {
+    addOutput('✗ Not connected to Hypha server', 'error');
+    return;
+  }
+
+  try {
+    const removed = hyphaService.removeService(serviceId);
+    if (removed) {
+      addOutput(`✓ Service removed: ${serviceId}`, 'info');
+      updateServicesList();
+    } else {
+      addOutput(`✗ Service not found: ${serviceId}`, 'error');
+    }
+  } catch (error) {
+    addOutput(`✗ Failed to remove service: ${(error as Error).message}`, 'error');
+  }
+}
+
+// Expose removeService to window for inline onclick handlers
+(window as any).removeService = removeServiceById;
+
+// Services button click
+servicesBtn.addEventListener('click', showServicesDialog);
+
+// Close services dialog
+closeServicesBtn.addEventListener('click', hideServicesDialog);
+closeServicesBtn2.addEventListener('click', hideServicesDialog);
+
+// Install service
+installServiceBtn.addEventListener('click', installService);
+
+// Close modal on overlay click
+servicesModal.addEventListener('click', (e) => {
+  if (e.target === servicesModal) {
+    hideServicesDialog();
+  }
+});
+
 // Kernel initialization
 async function initializeKernel() {
   try {
@@ -176,7 +298,7 @@ async function initializeKernel() {
 
     await kernelManager.initialize();
 
-    // Initialize agent manager after kernel is ready
+    // Initialize agent manager first - it's independent of HyphaService
     const settings = settingsManager.getSettings();
     agentManager = new AgentManager(
       settings,
@@ -185,7 +307,8 @@ async function initializeKernel() {
     );
     addOutput('✓ AI agent initialized');
 
-    // Initialize Hypha service
+    // Initialize Hypha service with agent manager reference
+    // HyphaService will manage service installation and inject service info into system prompt
     hyphaService = new HyphaService(
       settings,
       kernelManager,

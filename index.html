@@ -430,6 +430,60 @@
         .hljs-attribute {
             color: #9cdcfe;
         }
+
+        /* Service List Items */
+        .service-item {
+            padding: 12px;
+            background: #1e1e1e;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+
+        .service-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .service-name {
+            font-weight: 500;
+            color: #4ec9b0;
+            font-size: 14px;
+        }
+
+        .service-remove-btn {
+            padding: 4px 12px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        .service-remove-btn:hover {
+            background: #dc2626;
+        }
+
+        .service-description {
+            font-size: 12px;
+            color: #8b8b8b;
+            margin-bottom: 6px;
+        }
+
+        .service-url {
+            font-size: 11px;
+            color: #569cd6;
+            word-break: break-all;
+        }
+
+        .service-functions {
+            margin-top: 8px;
+            font-size: 11px;
+            color: #8b8b8b;
+        }
     </style>
 </head>
 <body>
@@ -441,6 +495,7 @@
                 <span id="statusText">Initializing...</span>
             </div>
             <button id="settingsBtn" title="Settings">⚙️ Settings</button>
+            <button id="servicesBtn" title="Manage Services">🔌 Services</button>
             <button id="connectBtn">Connect to Hypha</button>
             <button id="restartBtn" disabled>Restart Kernel</button>
             <button id="clearBtn">Clear</button>
@@ -530,6 +585,40 @@
             <div class="modal-footer">
                 <button class="button-secondary" id="cancelSettingsBtn">Cancel</button>
                 <button id="saveSettingsBtn">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Services Modal -->
+    <div class="modal-overlay" id="servicesModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Hypha Services</h2>
+                <button class="modal-close" id="closeServicesBtn">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="serviceUrl">Service URL</label>
+                    <input
+                        type="text"
+                        id="serviceUrl"
+                        placeholder="https://hypha.aicell.io/workspace/services/client:service"
+                    />
+                    <small>Full URL of the Hypha service to install</small>
+                </div>
+                <button id="installServiceBtn" style="width: 100%; margin-bottom: 20px;">Install Service</button>
+
+                <div class="form-group">
+                    <label>Installed Services</label>
+                    <div id="installedServicesList" style="max-height: 300px; overflow-y: auto;">
+                        <div style="text-align: center; padding: 20px; color: #8b8b8b; font-size: 13px;">
+                            No services installed yet
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="button-secondary" id="closeServicesBtn2">Close</button>
             </div>
         </div>
     </div>
