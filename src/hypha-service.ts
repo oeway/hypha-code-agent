@@ -217,6 +217,46 @@ export class HyphaService {
       this.onOutput(`✓ Connected to Hypha server at ${config.serverUrl}`, 'info');
       this.onOutput(`Workspace: ${this.server.config.workspace}`, 'info');
 
+      // Fallback to server environment variables if credentials not provided
+      let baseUrl = this.settings.openaiBaseUrl;
+      let apiKey = this.settings.openaiApiKey;
+
+      if (!baseUrl || !apiKey) {
+        try {
+          if (!baseUrl) {
+            const envBaseUrl = await this.server.getEnv('OPENAI_BASE_URL');
+            if (envBaseUrl) {
+              baseUrl = envBaseUrl;
+              this.onOutput('✓ Using OPENAI_BASE_URL from Hypha server environment', 'info');
+            }
+          }
+
+          if (!apiKey) {
+            const envApiKey = await this.server.getEnv('OPENAI_API_KEY');
+            if (envApiKey) {
+              apiKey = envApiKey;
+              this.onOutput('✓ Using OPENAI_API_KEY from Hypha server environment', 'info');
+            }
+          }
+
+          // Update settings with environment values
+          if (baseUrl !== this.settings.openaiBaseUrl || apiKey !== this.settings.openaiApiKey) {
+            this.settings = {
+              ...this.settings,
+              openaiBaseUrl: baseUrl,
+              openaiApiKey: apiKey
+            };
+
+            // Update agent manager with new settings
+            if (this.agentManager) {
+              this.agentManager.updateSettings(this.settings);
+            }
+          }
+        } catch (error) {
+          this.onOutput(`Could not fetch environment variables from server: ${(error as Error).message}`, 'info');
+        }
+      }
+
       // Register the code agent service
       await this.registerService(config);
 
